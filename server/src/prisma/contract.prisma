@@ -1,0 +1,109 @@
+// use prisma-8
+
+model User {
+  id        Int      @id @default(autoincrement())
+  email     String   @unique
+  username  String   @unique
+  password  String
+  createdAt DateTime @default(now())
+  updatedAt temporal.updatedAt()
+
+  ratings         Rating[]
+  favoriteArtists UserFavoriteArtist[]
+  favoriteGenres  UserFavoriteGenre[]
+}
+
+model Artist {
+  id   Int    @id @default(autoincrement())
+  name String @unique
+
+  songs         Song[]
+  favoritedBy   UserFavoriteArtist[]
+}
+
+model Genre {
+  id   Int    @id @default(autoincrement())
+  name String @unique
+
+  songs       Song[]
+  favoritedBy UserFavoriteGenre[]
+}
+
+model Song {
+  id          Int    @id @default(autoincrement())
+  title       String
+  externalId  String? @unique
+
+  artistId Int
+  genreId  Int?
+
+  tempo            Float?
+  energy           Float?
+  danceability     Float?
+  valence          Float?
+  acousticness     Float?
+  instrumentalness Float?
+  speechiness      Float?
+  liveness         Float?
+  popularity       Float?
+  duration         Float?
+
+  createdAt DateTime @default(now())
+  updatedAt temporal.updatedAt()
+
+  artist Artist @relation(fields: [artistId], references: [id])
+  genre  Genre? @relation(fields: [genreId], references: [id])
+
+  ratings Rating[]
+
+  @@index([artistId])
+  @@index([genreId])
+  @@index([title])
+}
+
+model Rating {
+  id        Int      @id @default(autoincrement())
+  value     Int
+  createdAt DateTime @default(now())
+  updatedAt temporal.updatedAt()
+
+  userId Int
+  songId Int
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  song Song @relation(fields: [songId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, songId])
+  @@index([userId])
+  @@index([songId])
+}
+
+model UserFavoriteArtist {
+  id        Int      @id @default(autoincrement())
+  createdAt DateTime @default(now())
+
+  userId   Int
+  artistId Int
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  artist Artist @relation(fields: [artistId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, artistId])
+  @@index([userId])
+  @@index([artistId])
+}
+
+model UserFavoriteGenre {
+  id        Int      @id @default(autoincrement())
+  createdAt DateTime @default(now())
+
+  userId  Int
+  genreId Int
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  genre Genre @relation(fields: [genreId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, genreId])
+  @@index([userId])
+  @@index([genreId])
+}
