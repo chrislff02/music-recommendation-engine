@@ -12,3 +12,6 @@ client/dist/
 server/dist/
 
 recommender/.venv/
+
+data/raw/
+data/processed/
