@@ -1,7 +1,11 @@
 import express from "express";
 import cors from "cors";
+import bcrypt from "bcryptjs";
+import jwt from "jsonwebtoken";
 
 import { pool } from "./db";
+
+import { requireAuth, type AuthenticatedRequest } from "./middleware/auth";
 
 const app = express();
 const PORT = 5001;
@@ -119,6 +123,266 @@ app.get("/api/songs", async (req, res) => {
     });
   }
 });
+
+app.post("/api/auth/register", async (req, res) => {
+  try {
+    const { email, username, password } = req.body;
+
+    if (!email || !username || !password) {
+      return res.status(400).json({
+        error: "Email, username, and password are required",
+      });
+    }
+
+    if (password.length < 8) {
+      return res.status(400).json({
+        error: "Password must be at least 8 characters long",
+      });
+    }
+
+    const existingUser = await pool.query(
+      `
+      SELECT id
+      FROM "User"
+      WHERE email = $1 OR username = $2
+      LIMIT 1
+      `,
+      [email, username],
+    );
+
+    if (existingUser.rows.length > 0) {
+      return res.status(409).json({
+        error: "Email or username is already in use",
+      });
+    }
+
+    const passwordHash = await bcrypt.hash(password, 12);
+
+    const result = await pool.query(
+      `
+      INSERT INTO "User" (
+        email,
+        username,
+        "passwordHash",
+        "updatedAt"
+      )
+      VALUES ($1, $2, $3, CURRENT_TIMESTAMP)
+      RETURNING id, email, username, "createdAt"
+      `,
+      [email, username, passwordHash],
+    );
+
+    const user = result.rows[0];
+
+    const jwtSecret = process.env.JWT_SECRET;
+
+    if (!jwtSecret) {
+      throw new Error("JWT_SECRET is not defined");
+    }
+
+    const token = jwt.sign(
+      {
+        userId: user.id,
+      },
+      jwtSecret,
+      {
+        expiresIn: "7d",
+      },
+    );
+
+    return res.status(201).json({
+      user,
+      token,
+    });
+  } catch (error) {
+    console.error("Failed to register user:", error);
+
+    return res.status(500).json({
+      error: "Failed to register user",
+    });
+  }
+});
+
+app.post("/api/auth/login", async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    if (!email || !password) {
+      return res.status(400).json({
+        error: "Email and password are required",
+      });
+    }
+
+    const result = await pool.query(
+      `
+      SELECT
+        id,
+        email,
+        username,
+        "passwordHash",
+        "createdAt"
+      FROM "User"
+      WHERE email = $1
+      LIMIT 1
+      `,
+      [email],
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(401).json({
+        error: "Invalid email or password",
+      });
+    }
+
+    const user = result.rows[0];
+
+    const passwordMatches = await bcrypt.compare(password, user.passwordHash);
+
+    if (!passwordMatches) {
+      return res.status(401).json({
+        error: "Invalid email or password",
+      });
+    }
+
+    const jwtSecret = process.env.JWT_SECRET;
+
+    if (!jwtSecret) {
+      throw new Error("JWT_SECRET is not defined");
+    }
+
+    const token = jwt.sign(
+      {
+        userId: user.id,
+      },
+      jwtSecret,
+      {
+        expiresIn: "7d",
+      },
+    );
+
+    return res.json({
+      user: {
+        id: user.id,
+        email: user.email,
+        username: user.username,
+        createdAt: user.createdAt,
+      },
+      token,
+    });
+  } catch (error) {
+    console.error("Failed to log in:", error);
+
+    return res.status(500).json({
+      error: "Failed to log in",
+    });
+  }
+});
+
+app.get("/api/auth/me", requireAuth, async (req: AuthenticatedRequest, res) => {
+  try {
+    const result = await pool.query(
+      `
+        SELECT
+          id,
+          email,
+          username,
+          "createdAt"
+        FROM "User"
+        WHERE id = $1
+        `,
+      [req.userId],
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        error: "User not found",
+      });
+    }
+
+    return res.json({
+      user: result.rows[0],
+    });
+  } catch (error) {
+    console.error("Failed to fetch current user:", error);
+
+    return res.status(500).json({
+      error: "Failed to fetch current user",
+    });
+  }
+});
+
+app.post(
+  "/api/ratings",
+  requireAuth,
+  async (req: AuthenticatedRequest, res) => {
+    try {
+      const { songId, value } = req.body;
+
+      if (!songId || !value) {
+        return res.status(400).json({
+          error: "songId and value are required",
+        });
+      }
+
+      if (!Number.isInteger(value) || value < 1 || value > 5) {
+        return res.status(400).json({
+          error: "Rating must be an integer from 1 to 5",
+        });
+      }
+
+      const songResult = await pool.query(
+        `
+        SELECT id
+        FROM "Song"
+        WHERE id = $1
+        `,
+        [songId],
+      );
+
+      if (songResult.rows.length === 0) {
+        return res.status(404).json({
+          error: "Song not found",
+        });
+      }
+
+      const result = await pool.query(
+        `
+        INSERT INTO "Rating" (
+          value,
+          "userId",
+          "songId",
+          "updatedAt"
+        )
+        VALUES ($1, $2, $3, CURRENT_TIMESTAMP)
+
+        ON CONFLICT ("userId", "songId")
+        DO UPDATE SET
+          value = EXCLUDED.value,
+          "updatedAt" = CURRENT_TIMESTAMP
+
+        RETURNING
+          id,
+          value,
+          "userId",
+          "songId",
+          "createdAt",
+          "updatedAt"
+        `,
+        [value, req.userId, songId],
+      );
+
+      return res.json({
+        rating: result.rows[0],
+      });
+    } catch (error) {
+      console.error("Failed to save rating:", error);
+
+      return res.status(500).json({
+        error: "Failed to save rating",
+      });
+    }
+  },
+);
 
 app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
