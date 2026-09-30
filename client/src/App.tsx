@@ -26,6 +26,18 @@ type SongsResponse = {
   songs: Song[];
 };
 
+type User = {
+  id: number;
+  email: string;
+  username: string;
+  createdAt: string;
+};
+
+type AuthResponse = {
+  user: User;
+  token: string;
+};
+
 const GENRES = [
   "",
   "Rock",
@@ -49,11 +61,21 @@ function App() {
 
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
-
   const [genre, setGenre] = useState("");
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+
+  const [user, setUser] = useState<User | null>(null);
+  const [token, setToken] = useState(
+    () => sessionStorage.getItem("token") ?? "",
+  );
+
+  const [authMode, setAuthMode] = useState<"login" | "register">("login");
+  const [authEmail, setAuthEmail] = useState("");
+  const [authUsername, setAuthUsername] = useState("");
+  const [authPassword, setAuthPassword] = useState("");
+  const [authError, setAuthError] = useState("");
 
   useEffect(() => {
     async function fetchSongs() {
@@ -97,6 +119,37 @@ function App() {
     fetchSongs();
   }, [page, search, genre]);
 
+  useEffect(() => {
+    if (!token) {
+      setUser(null);
+      return;
+    }
+
+    async function fetchCurrentUser() {
+      try {
+        const response = await fetch("http://localhost:5001/api/auth/me", {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        if (!response.ok) {
+          throw new Error("Invalid session");
+        }
+
+        const data = await response.json();
+
+        setUser(data.user);
+      } catch {
+        sessionStorage.removeItem("token");
+        setToken("");
+        setUser(null);
+      }
+    }
+
+    fetchCurrentUser();
+  }, [token]);
+
   function handleSearch(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
@@ -116,9 +169,133 @@ function App() {
     setPage(1);
   }
 
+  async function handleAuth(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    try {
+      setAuthError("");
+
+      const endpoint =
+        authMode === "login"
+          ? "http://localhost:5001/api/auth/login"
+          : "http://localhost:5001/api/auth/register";
+
+      const body =
+        authMode === "login"
+          ? {
+              email: authEmail,
+              password: authPassword,
+            }
+          : {
+              email: authEmail,
+              username: authUsername,
+              password: authPassword,
+            };
+
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(body),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error ?? "Authentication failed");
+      }
+
+      const authData = data as AuthResponse;
+
+      sessionStorage.setItem("token", authData.token);
+
+      setToken(authData.token);
+      setUser(authData.user);
+
+      setAuthEmail("");
+      setAuthUsername("");
+      setAuthPassword("");
+    } catch (err) {
+      if (err instanceof Error) {
+        setAuthError(err.message);
+      } else {
+        setAuthError("Authentication failed");
+      }
+    }
+  }
+
+  function handleLogout() {
+    sessionStorage.removeItem("token");
+    setToken("");
+    setUser(null);
+  }
+
   return (
     <main>
       <h1>Music Recommendation Engine</h1>
+
+      <section>
+        {user ? (
+          <>
+            <p>
+              Logged in as <strong>{user.username}</strong>
+            </p>
+
+            <button onClick={handleLogout}>Log Out</button>
+          </>
+        ) : (
+          <>
+            <h2>{authMode === "login" ? "Log In" : "Register"}</h2>
+
+            <form onSubmit={handleAuth}>
+              <input
+                type="email"
+                placeholder="Email"
+                value={authEmail}
+                onChange={(event) => setAuthEmail(event.target.value)}
+              />
+
+              {authMode === "register" && (
+                <input
+                  type="text"
+                  placeholder="Username"
+                  value={authUsername}
+                  onChange={(event) => setAuthUsername(event.target.value)}
+                />
+              )}
+
+              <input
+                type="password"
+                placeholder="Password"
+                value={authPassword}
+                onChange={(event) => setAuthPassword(event.target.value)}
+              />
+
+              <button type="submit">
+                {authMode === "login" ? "Log In" : "Register"}
+              </button>
+            </form>
+
+            {authError && <p>{authError}</p>}
+
+            <button
+              type="button"
+              onClick={() =>
+                setAuthMode((current) =>
+                  current === "login" ? "register" : "login",
+                )
+              }
+            >
+              {authMode === "login"
+                ? "Need an account? Register"
+                : "Already have an account? Log In"}
+            </button>
+          </>
+        )}
+      </section>
+
+      <hr />
 
       <h2>Browse Songs</h2>
 
