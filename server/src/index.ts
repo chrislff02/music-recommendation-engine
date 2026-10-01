@@ -384,6 +384,39 @@ app.post(
   },
 );
 
+app.get(
+  "/api/ratings/me",
+  requireAuth,
+  async (req: AuthenticatedRequest, res) => {
+    try {
+      const result = await pool.query(
+        `
+        SELECT
+          id,
+          value,
+          "songId",
+          "createdAt",
+          "updatedAt"
+        FROM "Rating"
+        WHERE "userId" = $1
+        ORDER BY "songId"
+        `,
+        [req.userId],
+      );
+
+      return res.json({
+        ratings: result.rows,
+      });
+    } catch (error) {
+      console.error("Failed to fetch ratings:", error);
+
+      return res.status(500).json({
+        error: "Failed to fetch ratings",
+      });
+    }
+  },
+);
+
 app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
 });

@@ -142,6 +142,28 @@ function App() {
         const data = await response.json();
 
         setUser(data.user);
+        const ratingsResponse = await fetch(
+          "http://localhost:5001/api/ratings/me",
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          },
+        );
+
+        if (!ratingsResponse.ok) {
+          throw new Error("Failed to load ratings");
+        }
+
+        const ratingsData = await ratingsResponse.json();
+
+        const ratingsMap: Record<number, number> = {};
+
+        for (const rating of ratingsData.ratings) {
+          ratingsMap[rating.songId] = rating.value;
+        }
+
+        setRatings(ratingsMap);
       } catch {
         sessionStorage.removeItem("token");
         setToken("");
@@ -271,6 +293,7 @@ function App() {
     sessionStorage.removeItem("token");
     setToken("");
     setUser(null);
+    setRatings({});
   }
 
   return (
