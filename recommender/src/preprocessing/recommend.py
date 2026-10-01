@@ -5,8 +5,8 @@ import sys
 
 import numpy as np
 import pandas as pd
-import psycopg
 from dotenv import load_dotenv
+from sqlalchemy import create_engine, text
 from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.preprocessing import StandardScaler
 
@@ -29,17 +29,9 @@ FEATURE_COLUMNS = [
 ]
 
 
-RATING_WEIGHTS = {
-    1: -0.75,
-    2: -0.25,
-    3: 0.0,
-    4: 0.75,
-    5: 1.0,
-}
-
-
-def load_songs(connection):
-    query = """
+def load_songs(engine):
+    query = text(
+        """
         SELECT
             s.id,
             s.title,
@@ -62,28 +54,34 @@ def load_songs(connection):
         LEFT JOIN "Genre" g
             ON s."genreId" = g.id
         ORDER BY s.id
-    """
+        """
+    )
 
     return pd.read_sql_query(
         query,
-        connection,
+        engine,
     )
 
 
-def load_ratings(connection, user_id):
-    query = """
+def load_ratings(engine, user_id):
+    query = text(
+        """
         SELECT
             "songId",
-            value
+            value,
+            "updatedAt"
         FROM "Rating"
-        WHERE "userId" = %s
+        WHERE "userId" = :user_id
         ORDER BY "songId"
-    """
+        """
+    )
 
     return pd.read_sql_query(
         query,
-        connection,
-        params=(user_id,),
+        engine,
+        params={
+            "user_id": user_id,
+        },
     )
 
 
@@ -93,19 +91,35 @@ def build_recommendations(user_id, limit=10):
     if not database_url:
         raise RuntimeError("DATABASE_URL is not defined")
 
-    with psycopg.connect(database_url) as connection:
-        songs = load_songs(connection)
-        ratings = load_ratings(connection, user_id)
+    engine = create_engine(
+        database_url.replace(
+            "postgresql://",
+            "postgresql+psycopg://",
+            1,
+        )
+    )
+
+    try:
+        songs = load_songs(engine)
+
+        ratings = load_ratings(
+            engine,
+            user_id,
+        )
+    finally:
+        engine.dispose()
 
     if ratings.empty:
         return pd.DataFrame()
 
-    # Keep only songs with all audio features required by the model.
+    # --------------------------------------------------
+    # PREPARE SONG DATA
+    # --------------------------------------------------
+
     usable_songs = songs.dropna(
         subset=FEATURE_COLUMNS
     ).copy()
 
-    # Combine this user's ratings with the matching song information.
     rated = ratings.merge(
         usable_songs,
         left_on="songId",
@@ -116,23 +130,37 @@ def build_recommendations(user_id, limit=10):
     if rated.empty:
         return pd.DataFrame()
 
-    # Convert 1-5 ratings into preference weights.
-    #
-    # 1 -> -0.75 = strong dislike
-    # 2 -> -0.25 = dislike
-    # 3 ->  0.00 = neutral
-    # 4 ->  0.75 = like
-    # 5 ->  1.00 = strong like
-    rated["weight"] = rated["value"].map(
-        RATING_WEIGHTS
+    # --------------------------------------------------
+    # RATING RECENCY
+    # --------------------------------------------------
+
+    rated["updatedAt"] = pd.to_datetime(
+        rated["updatedAt"],
+        utc=True,
+    )
+
+    now = pd.Timestamp.now(
+        tz="UTC"
+    )
+
+    rated["age_days"] = (
+        now - rated["updatedAt"]
+    ).dt.total_seconds() / 86400
+
+    # Ratings lose half of their recency influence
+    # after about 180 days.
+    half_life_days = 180
+
+    rated["recency_weight"] = np.exp(
+        -np.log(2)
+        * rated["age_days"]
+        / half_life_days
     )
 
     # --------------------------------------------------
-    # AUDIO PREFERENCE PROFILE
+    # STANDARDIZE AUDIO FEATURES
     # --------------------------------------------------
 
-    # Standardize features so tempo does not overpower
-    # features whose values normally range from 0 to 1.
     scaler = StandardScaler()
 
     song_features = scaler.fit_transform(
@@ -145,63 +173,164 @@ def build_recommendations(user_id, limit=10):
         columns=FEATURE_COLUMNS,
     )
 
-    weighted_profiles = []
+    # --------------------------------------------------
+    # SEPARATE LIKES AND DISLIKES
+    # --------------------------------------------------
 
-    for _, rating in rated.iterrows():
-        song_id = rating["songId"]
-        weight = rating["weight"]
+    liked = rated[
+        rated["value"] >= 4
+    ].copy()
 
-        feature_vector = feature_frame.loc[
-            song_id
-        ].to_numpy()
+    disliked = rated[
+        rated["value"] <= 2
+    ].copy()
 
-        weighted_profiles.append(
-            feature_vector * weight
-        )
-
-    user_profile = np.sum(
-        weighted_profiles,
-        axis=0,
-    )
-
-    # If every useful rating is neutral, there is no
-    # preference signal to build recommendations from.
-    if np.allclose(user_profile, 0):
+    if liked.empty and disliked.empty:
         return pd.DataFrame()
 
-    similarities = cosine_similarity(
-        [user_profile],
-        feature_frame.to_numpy(),
-    )[0]
-
-    usable_songs["similarity"] = similarities
-
     # --------------------------------------------------
-    # GENRE PREFERENCE PROFILE
+    # POSITIVE PROFILE
     # --------------------------------------------------
 
-    # Average the user's rating weight for each genre.
-    genre_preferences = (
+    positive_profile = None
+
+    if not liked.empty:
+        liked_vectors = []
+        liked_weights = []
+
+        for _, rating in liked.iterrows():
+            song_id = rating["songId"]
+
+            base_weight = (
+                1.0
+                if rating["value"] == 5
+                else 0.75
+            )
+
+            weight = (
+                base_weight
+                * rating["recency_weight"]
+            )
+
+            liked_vectors.append(
+                feature_frame.loc[
+                    song_id
+                ].to_numpy()
+            )
+
+            liked_weights.append(
+                weight
+            )
+
+        positive_profile = np.average(
+            liked_vectors,
+            axis=0,
+            weights=liked_weights,
+        )
+
+    # --------------------------------------------------
+    # NEGATIVE PROFILE
+    # --------------------------------------------------
+
+    negative_profile = None
+
+    if not disliked.empty:
+        disliked_vectors = []
+        disliked_weights = []
+
+        for _, rating in disliked.iterrows():
+            song_id = rating["songId"]
+
+            base_weight = (
+                1.0
+                if rating["value"] == 1
+                else 0.5
+            )
+
+            weight = (
+                base_weight
+                * rating["recency_weight"]
+            )
+
+            disliked_vectors.append(
+                feature_frame.loc[
+                    song_id
+                ].to_numpy()
+            )
+
+            disliked_weights.append(
+                weight
+            )
+
+        negative_profile = np.average(
+            disliked_vectors,
+            axis=0,
+            weights=disliked_weights,
+        )
+
+    # --------------------------------------------------
+    # AUDIO SIMILARITY
+    # --------------------------------------------------
+
+    candidate_features = feature_frame.to_numpy()
+
+    if positive_profile is not None:
+        positive_similarity = cosine_similarity(
+            [positive_profile],
+            candidate_features,
+        )[0]
+
+        usable_songs["positive_similarity"] = (
+            positive_similarity + 1
+        ) / 2
+    else:
+        usable_songs["positive_similarity"] = 0.5
+
+    if negative_profile is not None:
+        negative_similarity = cosine_similarity(
+            [negative_profile],
+            candidate_features,
+        )[0]
+
+        usable_songs["negative_similarity"] = (
+            negative_similarity + 1
+        ) / 2
+    else:
+        usable_songs["negative_similarity"] = 0.0
+
+    # --------------------------------------------------
+    # GENRE PREFERENCE
+    # --------------------------------------------------
+
+    genre_ratings = (
         rated.dropna(subset=["genre"])
-        .groupby("genre")["weight"]
+        .groupby("genre")["value"]
         .mean()
         .to_dict()
     )
 
-    usable_songs["genre_preference"] = (
+    def get_genre_score(genre):
+        if pd.isna(genre):
+            return 0.5
+
+        average_rating = genre_ratings.get(
+            genre
+        )
+
+        if average_rating is None:
+            return 0.5
+
+        return (
+            average_rating - 1
+        ) / 4
+
+    usable_songs["genre_score"] = (
         usable_songs["genre"]
-        .map(genre_preferences)
-        .fillna(0.0)
+        .apply(get_genre_score)
     )
 
-    # Convert the genre preference into a roughly 0-1 range
-    # so it can be combined with similarity and popularity.
-    usable_songs["genre_score"] = (
-        usable_songs["genre_preference"] + 1
-    ) / 2
-
     # --------------------------------------------------
-    # REMOVE SONGS ALREADY RATED
+    # REMOVE ALREADY-RATED SONGS
     # --------------------------------------------------
 
     rated_song_ids = set(
@@ -209,96 +338,284 @@ def build_recommendations(user_id, limit=10):
     )
 
     recommendations = usable_songs[
-        ~usable_songs["id"].isin(rated_song_ids)
+        ~usable_songs["id"].isin(
+            rated_song_ids
+        )
     ].copy()
 
+    if recommendations.empty:
+        return pd.DataFrame()
+
     # --------------------------------------------------
-    # FINAL RECOMMENDATION SCORE
+    # PERSONALIZATION CONFIDENCE
     # --------------------------------------------------
 
-    # Audio similarity is the strongest signal.
-    # Genre preference gives the user's favorite genres a boost.
-    # Popularity is only a small tie-breaker.
+    rating_count = len(
+        ratings
+    )
+
+    confidence = min(
+        rating_count / 10,
+        1.0,
+    )
+
+    # --------------------------------------------------
+    # FINAL SCORE
+    # --------------------------------------------------
+
+    personalized_score = (
+        recommendations["positive_similarity"] * 0.70
+        - recommendations["negative_similarity"] * 0.15
+        + recommendations["genre_score"] * 0.20
+    )
+
     recommendations["score"] = (
-        recommendations["similarity"] * 0.85
-        + recommendations["genre_score"] * 0.10
-        + recommendations["popularity"].fillna(0) * 0.05
+        personalized_score
+        * confidence
+        + recommendations["popularity"].fillna(0)
+        * (1 - confidence)
+    )
+
+    recommendations["score"] = (
+        recommendations["score"]
+        .clip(0, 1)
     )
 
     # --------------------------------------------------
     # EXPLANATIONS
     # --------------------------------------------------
 
-    profile_series = pd.Series(
-        user_profile,
-        index=FEATURE_COLUMNS,
-    )
+    positive_profile_series = None
+
+    if positive_profile is not None:
+        positive_profile_series = pd.Series(
+            positive_profile,
+            index=FEATURE_COLUMNS,
+        )
 
     def build_explanation(row):
         reasons = []
 
         genre = row["genre"]
-        genre_preference = row["genre_preference"]
+        genre_score = row["genre_score"]
 
         if pd.notna(genre):
-            if genre_preference >= 0.75:
+            if genre_score >= 0.75:
                 reasons.append(
-                    f"You strongly prefer {genre}."
-                )
-            elif genre_preference >= 0.25:
-                reasons.append(
-                    f"You tend to like {genre}."
+                    f"You've rated {genre} highly."
                 )
 
-        song_vector = feature_frame.loc[
-            row["id"]
-        ]
+            elif genre_score <= 0.25:
+                reasons.append(
+                    f"You've tended to rate {genre} lower."
+                )
 
-        # Find the two audio characteristics that are closest
-        # to the user's learned audio preference profile.
-        feature_distances = (
-            song_vector - profile_series
-        ).abs()
+        if positive_profile_series is not None:
+            feature_distances = (
+                feature_frame.loc[
+                    row["id"]
+                ]
+                - positive_profile_series
+            ).abs()
 
-        closest_features = (
-            feature_distances
-            .sort_values()
-            .head(2)
-            .index
-            .tolist()
-        )
-
-        if closest_features:
-            readable_features = " and ".join(
-                feature.replace("_", " ")
-                for feature in closest_features
+            closest_features = (
+                feature_distances
+                .sort_values()
+                .head(2)
+                .index
+                .tolist()
             )
 
+            if closest_features:
+                readable_features = " and ".join(
+                    feature.replace(
+                        "_",
+                        " ",
+                    )
+                    for feature in closest_features
+                )
+
+                reasons.append(
+                    f"Strong audio match on "
+                    f"{readable_features}."
+                )
+
+        if (
+            negative_profile is not None
+            and row["negative_similarity"]
+            >= row["positive_similarity"] - 0.10
+        ):
             reasons.append(
-                f"Strong audio match on {readable_features}."
+                "Some audio traits are also similar to songs "
+                "you rated lower."
             )
 
         if not reasons:
             reasons.append(
-                "This song has audio characteristics "
-                "similar to your preferences."
+                "This song matches your overall listening profile."
             )
 
-        return " ".join(reasons)
+        return " ".join(
+            reasons
+        )
 
-    recommendations["explanation"] = recommendations.apply(
-        build_explanation,
-        axis=1,
+    recommendations["explanation"] = (
+        recommendations.apply(
+            build_explanation,
+            axis=1,
+        )
     )
 
     # --------------------------------------------------
-    # RANK RESULTS
+    # DIVERSITY RERANKING
     # --------------------------------------------------
 
-    recommendations = recommendations.sort_values(
-        by="score",
-        ascending=False,
-    ).head(limit)
+    candidate_pool_size = max(
+        50,
+        limit * 5,
+    )
+
+    candidate_pool = (
+        recommendations
+        .sort_values(
+            by="score",
+            ascending=False,
+        )
+        .head(
+            candidate_pool_size
+        )
+        .copy()
+    )
+
+    selected_ids = []
+    artist_counts = {}
+
+    diversity_penalty = 0.10
+    max_per_artist = 2
+
+    while (
+        len(selected_ids) < limit
+        and not candidate_pool.empty
+    ):
+        best_song_id = None
+        best_rerank_score = float(
+            "-inf"
+        )
+
+        for _, candidate in candidate_pool.iterrows():
+            song_id = candidate["id"]
+            artist = candidate["artist"]
+
+            if (
+                artist_counts.get(
+                    artist,
+                    0,
+                )
+                >= max_per_artist
+            ):
+                continue
+
+            redundancy = 0.0
+
+            if selected_ids:
+                candidate_vector = (
+                    feature_frame.loc[
+                        song_id
+                    ]
+                    .to_numpy()
+                    .reshape(
+                        1,
+                        -1,
+                    )
+                )
+
+                selected_vectors = (
+                    feature_frame.loc[
+                        selected_ids
+                    ]
+                    .to_numpy()
+                )
+
+                similarities_to_selected = (
+                    cosine_similarity(
+                        candidate_vector,
+                        selected_vectors,
+                    )[0]
+                )
+
+                redundancy = max(
+                    0.0,
+                    float(
+                        similarities_to_selected.max()
+                    ),
+                )
+
+            rerank_score = (
+                candidate["score"]
+                - diversity_penalty
+                * redundancy
+            )
+
+            if (
+                rerank_score
+                > best_rerank_score
+            ):
+                best_rerank_score = (
+                    rerank_score
+                )
+
+                best_song_id = (
+                    song_id
+                )
+
+        if best_song_id is None:
+            break
+
+        selected_song = candidate_pool[
+            candidate_pool["id"]
+            == best_song_id
+        ].iloc[0]
+
+        selected_artist = (
+            selected_song[
+                "artist"
+            ]
+        )
+
+        selected_ids.append(
+            best_song_id
+        )
+
+        artist_counts[
+            selected_artist
+        ] = (
+            artist_counts.get(
+                selected_artist,
+                0,
+            )
+            + 1
+        )
+
+        candidate_pool = (
+            candidate_pool[
+                candidate_pool["id"]
+                != best_song_id
+            ]
+        )
+
+    if not selected_ids:
+        return pd.DataFrame()
+
+    recommendations = (
+        recommendations
+        .set_index("id")
+        .loc[selected_ids]
+        .reset_index()
+    )
+
+    # --------------------------------------------------
+    # RETURN RESULTS
+    # --------------------------------------------------
 
     return recommendations[
         [
@@ -306,8 +623,9 @@ def build_recommendations(user_id, limit=10):
             "title",
             "artist",
             "genre",
-            "similarity",
-            "genre_preference",
+            "positive_similarity",
+            "negative_similarity",
+            "genre_score",
             "popularity",
             "score",
             "explanation",
@@ -324,10 +642,14 @@ def main():
                 }
             )
         )
+
         sys.exit(1)
 
     try:
-        user_id = int(sys.argv[1])
+        user_id = int(
+            sys.argv[1]
+        )
+
     except ValueError:
         print(
             json.dumps(
@@ -336,6 +658,7 @@ def main():
                 }
             )
         )
+
         sys.exit(1)
 
     recommendations = build_recommendations(
@@ -351,6 +674,7 @@ def main():
                 }
             )
         )
+
         return
 
     records = recommendations.to_dict(
