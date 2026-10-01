@@ -44,8 +44,10 @@ type Recommendation = {
   artist: string;
   genre: string | null;
   similarity: number;
+  genre_preference: number;
   popularity: number;
   score: number;
+  explanation: string;
 };
 
 type RecommendationsResponse = {
@@ -442,7 +444,9 @@ function App() {
 
               <p>Genre: {song.genre ?? "Unknown"}</p>
 
-              <p>Match score: {(song.score * 100).toFixed(1)}%</p>
+              <p>Overall match: {(song.score * 100).toFixed(1)}%</p>
+
+              <p>{song.explanation}</p>
 
               <hr />
             </div>

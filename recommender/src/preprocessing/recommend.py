@@ -64,7 +64,10 @@ def load_songs(connection):
         ORDER BY s.id
     """
 
-    return pd.read_sql_query(query, connection)
+    return pd.read_sql_query(
+        query,
+        connection,
+    )
 
 
 def load_ratings(connection, user_id):
@@ -97,11 +100,12 @@ def build_recommendations(user_id, limit=10):
     if ratings.empty:
         return pd.DataFrame()
 
-    # Keep only songs with every audio feature required by the model.
+    # Keep only songs with all audio features required by the model.
     usable_songs = songs.dropna(
         subset=FEATURE_COLUMNS
     ).copy()
 
+    # Combine this user's ratings with the matching song information.
     rated = ratings.merge(
         usable_songs,
         left_on="songId",
@@ -113,6 +117,12 @@ def build_recommendations(user_id, limit=10):
         return pd.DataFrame()
 
     # Convert 1-5 ratings into preference weights.
+    #
+    # 1 -> -0.75 = strong dislike
+    # 2 -> -0.25 = dislike
+    # 3 ->  0.00 = neutral
+    # 4 ->  0.75 = like
+    # 5 ->  1.00 = strong like
     rated["weight"] = rated["value"].map(
         RATING_WEIGHTS
     )
@@ -121,6 +131,8 @@ def build_recommendations(user_id, limit=10):
     # AUDIO PREFERENCE PROFILE
     # --------------------------------------------------
 
+    # Standardize features so tempo does not overpower
+    # features whose values normally range from 0 to 1.
     scaler = StandardScaler()
 
     song_features = scaler.fit_transform(
@@ -152,6 +164,8 @@ def build_recommendations(user_id, limit=10):
         axis=0,
     )
 
+    # If every useful rating is neutral, there is no
+    # preference signal to build recommendations from.
     if np.allclose(user_profile, 0):
         return pd.DataFrame()
 
@@ -166,6 +180,7 @@ def build_recommendations(user_id, limit=10):
     # GENRE PREFERENCE PROFILE
     # --------------------------------------------------
 
+    # Average the user's rating weight for each genre.
     genre_preferences = (
         rated.dropna(subset=["genre"])
         .groupby("genre")["weight"]
@@ -173,16 +188,14 @@ def build_recommendations(user_id, limit=10):
         .to_dict()
     )
 
-    # Songs in genres the user likes receive a positive boost.
-    # Songs in disliked genres receive a negative adjustment.
     usable_songs["genre_preference"] = (
         usable_songs["genre"]
         .map(genre_preferences)
         .fillna(0.0)
     )
 
-    # Normalize genre preference from the rating-weight range
-    # into approximately 0-1 for easier score combination.
+    # Convert the genre preference into a roughly 0-1 range
+    # so it can be combined with similarity and popularity.
     usable_songs["genre_score"] = (
         usable_songs["genre_preference"] + 1
     ) / 2
@@ -203,11 +216,84 @@ def build_recommendations(user_id, limit=10):
     # FINAL RECOMMENDATION SCORE
     # --------------------------------------------------
 
+    # Audio similarity is the strongest signal.
+    # Genre preference gives the user's favorite genres a boost.
+    # Popularity is only a small tie-breaker.
     recommendations["score"] = (
         recommendations["similarity"] * 0.85
         + recommendations["genre_score"] * 0.10
         + recommendations["popularity"].fillna(0) * 0.05
     )
+
+    # --------------------------------------------------
+    # EXPLANATIONS
+    # --------------------------------------------------
+
+    profile_series = pd.Series(
+        user_profile,
+        index=FEATURE_COLUMNS,
+    )
+
+    def build_explanation(row):
+        reasons = []
+
+        genre = row["genre"]
+        genre_preference = row["genre_preference"]
+
+        if pd.notna(genre):
+            if genre_preference >= 0.75:
+                reasons.append(
+                    f"You strongly prefer {genre}."
+                )
+            elif genre_preference >= 0.25:
+                reasons.append(
+                    f"You tend to like {genre}."
+                )
+
+        song_vector = feature_frame.loc[
+            row["id"]
+        ]
+
+        # Find the two audio characteristics that are closest
+        # to the user's learned audio preference profile.
+        feature_distances = (
+            song_vector - profile_series
+        ).abs()
+
+        closest_features = (
+            feature_distances
+            .sort_values()
+            .head(2)
+            .index
+            .tolist()
+        )
+
+        if closest_features:
+            readable_features = " and ".join(
+                feature.replace("_", " ")
+                for feature in closest_features
+            )
+
+            reasons.append(
+                f"Strong audio match on {readable_features}."
+            )
+
+        if not reasons:
+            reasons.append(
+                "This song has audio characteristics "
+                "similar to your preferences."
+            )
+
+        return " ".join(reasons)
+
+    recommendations["explanation"] = recommendations.apply(
+        build_explanation,
+        axis=1,
+    )
+
+    # --------------------------------------------------
+    # RANK RESULTS
+    # --------------------------------------------------
 
     recommendations = recommendations.sort_values(
         by="score",
@@ -224,123 +310,7 @@ def build_recommendations(user_id, limit=10):
             "genre_preference",
             "popularity",
             "score",
-        ]
-    ]
-    database_url = os.getenv("DATABASE_URL")
-
-    if not database_url:
-        raise RuntimeError("DATABASE_URL is not defined")
-
-    with psycopg.connect(database_url) as connection:
-        songs = load_songs(connection)
-        ratings = load_ratings(connection, user_id)
-
-    if ratings.empty:
-        return pd.DataFrame()
-
-    # Keep only songs with every audio feature required by the model.
-    usable_songs = songs.dropna(
-        subset=FEATURE_COLUMNS
-    ).copy()
-
-    rated = ratings.merge(
-        usable_songs,
-        left_on="songId",
-        right_on="id",
-        how="inner",
-    )
-
-    if rated.empty:
-        return pd.DataFrame()
-
-    # Standardize the audio features so a large-scale feature such as
-    # tempo does not overpower features whose values range from 0 to 1.
-    scaler = StandardScaler()
-
-    song_features = scaler.fit_transform(
-        usable_songs[FEATURE_COLUMNS]
-    )
-
-    feature_frame = pd.DataFrame(
-        song_features,
-        index=usable_songs["id"],
-        columns=FEATURE_COLUMNS,
-    )
-
-    # Rating weights:
-    #
-    # 1 -> -0.75 = strong dislike
-    # 2 -> -0.25 = dislike
-    # 3 ->  0.00 = neutral
-    # 4 ->  0.75 = like
-    # 5 ->  1.00 = strong like
-    #
-    # Positive ratings pull the user profile toward similar songs.
-    # Negative ratings push the profile away from similar songs.
-    rated["weight"] = rated["value"].map(
-        RATING_WEIGHTS
-    )
-
-    weighted_profiles = []
-
-    for _, rating in rated.iterrows():
-        song_id = rating["songId"]
-        weight = rating["weight"]
-
-        feature_vector = feature_frame.loc[
-            song_id
-        ].to_numpy()
-
-        weighted_profiles.append(
-            feature_vector * weight
-        )
-
-    user_profile = np.sum(
-        weighted_profiles,
-        axis=0,
-    )
-
-    # If all ratings are neutral, there is no preference signal.
-    if np.allclose(user_profile, 0):
-        return pd.DataFrame()
-
-    similarities = cosine_similarity(
-        [user_profile],
-        feature_frame.to_numpy(),
-    )[0]
-
-    usable_songs["similarity"] = similarities
-
-    rated_song_ids = set(
-        ratings["songId"]
-    )
-
-    # Never recommend a song the user has already rated.
-    recommendations = usable_songs[
-        ~usable_songs["id"].isin(rated_song_ids)
-    ].copy()
-
-    # Musical similarity drives 95% of the final score.
-    # Popularity acts only as a small tie-breaker.
-    recommendations["score"] = (
-        recommendations["similarity"] * 0.95
-        + recommendations["popularity"].fillna(0) * 0.05
-    )
-
-    recommendations = recommendations.sort_values(
-        by="score",
-        ascending=False,
-    ).head(limit)
-
-    return recommendations[
-        [
-            "id",
-            "title",
-            "artist",
-            "genre",
-            "similarity",
-            "popularity",
-            "score",
+            "explanation",
         ]
     ]
 
