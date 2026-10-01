@@ -76,6 +76,8 @@ function App() {
   const [authUsername, setAuthUsername] = useState("");
   const [authPassword, setAuthPassword] = useState("");
   const [authError, setAuthError] = useState("");
+  const [ratings, setRatings] = useState<Record<number, number>>({});
+  const [ratingError, setRatingError] = useState("");
 
   useEffect(() => {
     async function fetchSongs() {
@@ -225,6 +227,46 @@ function App() {
     }
   }
 
+  async function handleRateSong(songId: number, value: number) {
+    if (!token) {
+      setRatingError("You must be logged in to rate songs.");
+      return;
+    }
+
+    try {
+      setRatingError("");
+
+      const response = await fetch("http://localhost:5001/api/ratings", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          songId,
+          value,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error ?? "Failed to save rating");
+      }
+
+      setRatings((current) => ({
+        ...current,
+        [songId]: data.rating.value,
+      }));
+    } catch (err) {
+      if (err instanceof Error) {
+        setRatingError(err.message);
+      } else {
+        setRatingError("Failed to save rating");
+      }
+    }
+  }
+
   function handleLogout() {
     sessionStorage.removeItem("token");
     setToken("");
@@ -330,6 +372,8 @@ function App() {
 
       {error && <p>{error}</p>}
 
+      {ratingError && <p>{ratingError}</p>}
+
       {!loading && !error && songs.length === 0 && <p>No songs found.</p>}
 
       {!loading && !error && songs.length > 0 && (
@@ -347,6 +391,29 @@ function App() {
                   Duration: {Math.floor(song.duration / 60)}:
                   {String(song.duration % 60).padStart(2, "0")}
                 </p>
+
+                {user ? (
+                  <div>
+                    <p>
+                      Your rating:{" "}
+                      {ratings[song.id] ? `${ratings[song.id]}/5` : "Not rated"}
+                    </p>
+
+                    <div>
+                      {[1, 2, 3, 4, 5].map((value) => (
+                        <button
+                          key={value}
+                          type="button"
+                          onClick={() => handleRateSong(song.id, value)}
+                        >
+                          {value}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <p>Log in to rate this song.</p>
+                )}
 
                 <hr />
               </div>
