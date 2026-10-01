@@ -3,6 +3,8 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import psycopg
+import json
+import sys
 from dotenv import load_dotenv
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics.pairwise import cosine_similarity
@@ -188,10 +190,27 @@ def build_recommendations(user_id, limit=10):
 
 
 def main():
-    user_id = 1
+    if len(sys.argv) < 2:
+        print(
+            json.dumps(
+                {
+                    "error": "user_id is required",
+                }
+            )
+        )
+        sys.exit(1)
 
-    print(f"=== Recommendations for user {user_id} ===")
-    print()
+    try:
+        user_id = int(sys.argv[1])
+    except ValueError:
+        print(
+            json.dumps(
+                {
+                    "error": "user_id must be an integer",
+                }
+            )
+        )
+        sys.exit(1)
 
     recommendations = build_recommendations(
         user_id=user_id,
@@ -199,14 +218,26 @@ def main():
     )
 
     if recommendations.empty:
+        print(
+            json.dumps(
+                {
+                    "recommendations": [],
+                }
+            )
+        )
         return
 
-    print(
-        recommendations.to_string(
-            index=False,
-        )
+    records = recommendations.to_dict(
+        orient="records"
     )
 
+    print(
+        json.dumps(
+            {
+                "recommendations": records,
+            }
+        )
+    )
 
 if __name__ == "__main__":
     main()

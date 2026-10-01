@@ -38,6 +38,20 @@ type AuthResponse = {
   token: string;
 };
 
+type Recommendation = {
+  id: number;
+  title: string;
+  artist: string;
+  genre: string | null;
+  similarity: number;
+  popularity: number;
+  score: number;
+};
+
+type RecommendationsResponse = {
+  recommendations: Recommendation[];
+};
+
 const GENRES = [
   "",
   "Rock",
@@ -78,6 +92,10 @@ function App() {
   const [authError, setAuthError] = useState("");
   const [ratings, setRatings] = useState<Record<number, number>>({});
   const [ratingError, setRatingError] = useState("");
+
+  const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
+  const [recommendationsLoading, setRecommendationsLoading] = useState(false);
+  const [recommendationsError, setRecommendationsError] = useState("");
 
   useEffect(() => {
     async function fetchSongs() {
@@ -173,6 +191,42 @@ function App() {
 
     fetchCurrentUser();
   }, [token]);
+
+  async function fetchRecommendations() {
+    if (!token) {
+      return;
+    }
+
+    try {
+      setRecommendationsLoading(true);
+      setRecommendationsError("");
+
+      const response = await fetch(
+        "http://localhost:5001/api/recommendations",
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        },
+      );
+
+      const data: RecommendationsResponse = await response.json();
+
+      if (!response.ok) {
+        throw new Error("Failed to load recommendations");
+      }
+
+      setRecommendations(data.recommendations);
+    } catch (err) {
+      if (err instanceof Error) {
+        setRecommendationsError(err.message);
+      } else {
+        setRecommendationsError("Failed to load recommendations");
+      }
+    } finally {
+      setRecommendationsLoading(false);
+    }
+  }
 
   function handleSearch(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -294,6 +348,7 @@ function App() {
     setToken("");
     setUser(null);
     setRatings({});
+    setRecommendations([]);
   }
 
   return (
@@ -308,6 +363,9 @@ function App() {
             </p>
 
             <button onClick={handleLogout}>Log Out</button>
+            <button type="button" onClick={fetchRecommendations}>
+              Get Recommendations
+            </button>
           </>
         ) : (
           <>
@@ -361,6 +419,36 @@ function App() {
       </section>
 
       <hr />
+
+      {user && (
+        <section>
+          <h2>Recommended For You</h2>
+
+          {recommendationsLoading && <p>Generating recommendations...</p>}
+
+          {recommendationsError && <p>{recommendationsError}</p>}
+
+          {!recommendationsLoading &&
+            recommendations.length === 0 &&
+            !recommendationsError && (
+              <p>Rate a few songs, then click Get Recommendations.</p>
+            )}
+
+          {recommendations.map((song) => (
+            <div key={song.id}>
+              <h3>{song.title}</h3>
+
+              <p>Artist: {song.artist}</p>
+
+              <p>Genre: {song.genre ?? "Unknown"}</p>
+
+              <p>Match score: {(song.score * 100).toFixed(1)}%</p>
+
+              <hr />
+            </div>
+          ))}
+        </section>
+      )}
 
       <h2>Browse Songs</h2>
 

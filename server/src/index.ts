@@ -7,8 +7,13 @@ import { pool } from "./db";
 
 import { requireAuth, type AuthenticatedRequest } from "./middleware/auth";
 
+import { execFile } from "node:child_process";
+import path from "node:path";
+import { promisify } from "node:util";
+
 const app = express();
 const PORT = 5001;
+const execFileAsync = promisify(execFile);
 
 app.use(cors());
 app.use(express.json());
@@ -412,6 +417,56 @@ app.get(
 
       return res.status(500).json({
         error: "Failed to fetch ratings",
+      });
+    }
+  },
+);
+
+app.get(
+  "/api/recommendations",
+  requireAuth,
+  async (req: AuthenticatedRequest, res) => {
+    try {
+      if (!req.userId) {
+        return res.status(401).json({
+          error: "Authentication required",
+        });
+      }
+
+      const projectRoot = path.resolve(process.cwd(), "..");
+
+      const pythonPath = path.join(
+        projectRoot,
+        "recommender",
+        ".venv",
+        "bin",
+        "python",
+      );
+
+      const recommenderPath = path.join(
+        projectRoot,
+        "recommender",
+        "src",
+        "preprocessing",
+        "recommend.py",
+      );
+
+      const { stdout } = await execFileAsync(
+        pythonPath,
+        [recommenderPath, String(req.userId)],
+        {
+          cwd: projectRoot,
+        },
+      );
+
+      const data = JSON.parse(stdout.trim());
+
+      return res.json(data);
+    } catch (error) {
+      console.error("Failed to generate recommendations:", error);
+
+      return res.status(500).json({
+        error: "Failed to generate recommendations",
       });
     }
   },
