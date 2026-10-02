@@ -1,54 +1,86 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+
 import "./App.css";
 
 type Song = {
   id: number;
+
   title: string;
+
   externalId: string;
+
   tempo: number;
+
   energy: number;
+
   danceability: number;
+
   valence: number;
+
   acousticness: number;
+
   instrumentalness: number;
+
   speechiness: number;
+
   liveness: number;
+
   popularity: number;
+
   duration: number;
+
   artist: string;
+
   genre: string | null;
 };
 
 type SongsResponse = {
   page: number;
+
   limit: number;
+
   total: number;
+
   totalPages: number;
+
   songs: Song[];
 };
 
 type User = {
   id: number;
+
   email: string;
+
   username: string;
+
   createdAt: string;
 };
 
 type AuthResponse = {
   user: User;
+
   token: string;
 };
 
 type Recommendation = {
   id: number;
+
   title: string;
+
   artist: string;
+
   genre: string | null;
+
   positive_similarity: number;
+
   negative_similarity: number;
+
   genre_score: number;
+
   popularity: number;
+
   score: number;
+
   explanation: string;
 };
 
@@ -58,30 +90,47 @@ type RecommendationsResponse = {
 
 const GENRES = [
   "",
+
   "Rock",
+
   "Electronic",
+
   "Hip-Hop",
+
   "Folk",
+
   "Old-Time / Historic",
+
   "Pop",
+
   "Classical",
+
   "Jazz",
+
   "International",
+
   "Instrumental",
+
   "Blues",
+
   "Experimental",
 ];
 
 function App() {
   const [songs, setSongs] = useState<Song[]>([]);
+
   const [page, setPage] = useState(1);
+
   const [totalPages, setTotalPages] = useState(1);
 
   const [searchInput, setSearchInput] = useState("");
+
   const [search, setSearch] = useState("");
+
   const [genre, setGenre] = useState("");
 
   const [loading, setLoading] = useState(true);
+
   const [error, setError] = useState("");
 
   const [user, setUser] = useState<User | null>(null);
@@ -93,12 +142,18 @@ function App() {
   const [authMode, setAuthMode] = useState<"login" | "register">("login");
 
   const [authEmail, setAuthEmail] = useState("");
+
   const [authUsername, setAuthUsername] = useState("");
+
   const [authPassword, setAuthPassword] = useState("");
+
   const [authError, setAuthError] = useState("");
 
   const [ratings, setRatings] = useState<Record<number, number>>({});
+
   const [ratingError, setRatingError] = useState("");
+
+  const [ratingsLoaded, setRatingsLoaded] = useState(false);
 
   const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
 
@@ -110,10 +165,12 @@ function App() {
     async function fetchSongs() {
       try {
         setLoading(true);
+
         setError("");
 
         const params = new URLSearchParams({
           page: String(page),
+
           limit: "10",
         });
 
@@ -136,9 +193,11 @@ function App() {
         const data: SongsResponse = await response.json();
 
         setSongs(data.songs);
+
         setTotalPages(data.totalPages);
       } catch (err) {
         console.error(err);
+
         setError("Could not load songs.");
       } finally {
         setLoading(false);
@@ -151,6 +210,8 @@ function App() {
   useEffect(() => {
     if (!token) {
       setUser(null);
+      setRatings({});
+      setRatingsLoaded(false);
       return;
     }
 
@@ -192,27 +253,33 @@ function App() {
         }
 
         setRatings(ratingsMap);
+        setRatingsLoaded(true);
       } catch {
         sessionStorage.removeItem("token");
         setToken("");
         setUser(null);
+        setRatings({});
+        setRatingsLoaded(false);
+        setRecommendations([]);
       }
     }
 
     fetchCurrentUser();
   }, [token]);
 
-  async function fetchRecommendations() {
+  const fetchRecommendations = useCallback(async () => {
     if (!token) {
       return;
     }
 
     try {
       setRecommendationsLoading(true);
+
       setRecommendationsError("");
 
       const response = await fetch(
         "http://localhost:5001/api/recommendations",
+
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -236,24 +303,46 @@ function App() {
     } finally {
       setRecommendationsLoading(false);
     }
-  }
+  }, [token]);
+
+  useEffect(() => {
+    if (!user || !ratingsLoaded) {
+      return;
+    }
+
+    const hasMeaningfulRatings = Object.values(ratings).some(
+      (value) => value !== 3,
+    );
+
+    if (!hasMeaningfulRatings) {
+      setRecommendations([]);
+      return;
+    }
+
+    void fetchRecommendations();
+  }, [user, ratings, ratingsLoaded, fetchRecommendations]);
 
   function handleSearch(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     setPage(1);
+
     setSearch(searchInput.trim());
   }
 
   function handleGenreChange(event: React.ChangeEvent<HTMLSelectElement>) {
     setPage(1);
+
     setGenre(event.target.value);
   }
 
   function handleClearFilters() {
     setSearchInput("");
+
     setSearch("");
+
     setGenre("");
+
     setPage(1);
   }
 
@@ -272,19 +361,24 @@ function App() {
         authMode === "login"
           ? {
               email: authEmail,
+
               password: authPassword,
             }
           : {
               email: authEmail,
+
               username: authUsername,
+
               password: authPassword,
             };
 
       const response = await fetch(endpoint, {
         method: "POST",
+
         headers: {
           "Content-Type": "application/json",
         },
+
         body: JSON.stringify(body),
       });
 
@@ -299,10 +393,13 @@ function App() {
       sessionStorage.setItem("token", authData.token);
 
       setToken(authData.token);
+
       setUser(authData.user);
 
       setAuthEmail("");
+
       setAuthUsername("");
+
       setAuthPassword("");
     } catch (err) {
       if (err instanceof Error) {
@@ -325,12 +422,16 @@ function App() {
 
       const response = await fetch("http://localhost:5001/api/ratings", {
         method: "POST",
+
         headers: {
           "Content-Type": "application/json",
+
           Authorization: `Bearer ${token}`,
         },
+
         body: JSON.stringify({
           songId,
+
           value,
         }),
       });
@@ -343,6 +444,7 @@ function App() {
 
       setRatings((current) => ({
         ...current,
+
         [songId]: data.rating.value,
       }));
 
@@ -359,19 +461,20 @@ function App() {
   }
 
   async function handleRateRecommendation(songId: number, value: number) {
-    const success = await handleRateSong(songId, value);
-
-    if (success) {
-      await fetchRecommendations();
-    }
+    await handleRateSong(songId, value);
   }
 
   function handleLogout() {
     sessionStorage.removeItem("token");
 
     setToken("");
+
     setUser(null);
+
     setRatings({});
+
+    setRatingsLoaded(false);
+
     setRecommendations([]);
   }
 
@@ -383,6 +486,7 @@ function App() {
 
           <div>
             <h2>MusicMatch</h2>
+
             <p>Discovery Engine</p>
           </div>
         </div>
@@ -417,6 +521,7 @@ function App() {
 
               <div className="sidebar-user-info">
                 <span>Signed in as</span>
+
                 <strong>{user.username}</strong>
               </div>
 
@@ -434,6 +539,7 @@ function App() {
 
               <div className="sidebar-user-info">
                 <span>Browsing as</span>
+
                 <strong>Guest</strong>
               </div>
             </>
@@ -572,7 +678,9 @@ function App() {
 
                         <p className="recommendation-meta">
                           {song.artist}
+
                           <span>•</span>
+
                           {song.genre ?? "Unknown"}
                         </p>
                       </div>
