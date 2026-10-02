@@ -298,31 +298,46 @@ def build_recommendations(user_id, limit=10):
     else:
         usable_songs["negative_similarity"] = 0.0
 
-    # --------------------------------------------------
-    # GENRE PREFERENCE
-    # --------------------------------------------------
+# --------------------------------------------------
+# GENRE PREFERENCE
+# --------------------------------------------------
 
-    genre_ratings = (
-        rated.dropna(subset=["genre"])
-        .groupby("genre")["value"]
-        .mean()
-        .to_dict()
-    )
+    genre_data = rated.dropna(
+        subset=["genre"]
+    ).copy()
+
+    genre_scores = {}
+
+    for genre, group in genre_data.groupby("genre"):
+        ratings_array = group["value"].to_numpy()
+
+        recency_weights = (
+            group["recency_weight"]
+            .to_numpy()
+        )
+
+        # Calculate a recency-weighted average rating.
+        weighted_average = np.average(
+            ratings_array,
+            weights=recency_weights,
+        )
+
+        # Convert the 1-5 rating scale into 0-1.
+        genre_scores[genre] = (
+            weighted_average - 1
+        ) / 4
+
 
     def get_genre_score(genre):
         if pd.isna(genre):
             return 0.5
 
-        average_rating = genre_ratings.get(
-            genre
+        # Genres the user has never rated are neutral.
+        return genre_scores.get(
+            genre,
+            0.5,
         )
 
-        if average_rating is None:
-            return 0.5
-
-        return (
-            average_rating - 1
-        ) / 4
 
     usable_songs["genre_score"] = (
         usable_songs["genre"]
