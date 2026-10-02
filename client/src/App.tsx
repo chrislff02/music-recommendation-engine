@@ -4,83 +4,52 @@ import "./App.css";
 
 type Song = {
   id: number;
-
   title: string;
-
   externalId: string;
-
   tempo: number;
-
   energy: number;
-
   danceability: number;
-
   valence: number;
-
   acousticness: number;
-
   instrumentalness: number;
-
   speechiness: number;
-
   liveness: number;
-
   popularity: number;
-
   duration: number;
-
   artist: string;
-
   genre: string | null;
 };
 
 type SongsResponse = {
   page: number;
-
   limit: number;
-
   total: number;
-
   totalPages: number;
-
   songs: Song[];
 };
 
 type User = {
   id: number;
-
   email: string;
-
   username: string;
-
   createdAt: string;
 };
 
 type AuthResponse = {
   user: User;
-
   token: string;
 };
 
 type Recommendation = {
   id: number;
-
   title: string;
-
   artist: string;
-
   genre: string | null;
-
   positive_similarity: number;
-
   negative_similarity: number;
-
   genre_score: number;
-
   popularity: number;
-
   score: number;
-
   explanation: string;
 };
 
@@ -90,76 +59,47 @@ type RecommendationsResponse = {
 
 const GENRES = [
   "",
-
   "Rock",
-
   "Electronic",
-
   "Hip-Hop",
-
   "Folk",
-
   "Old-Time / Historic",
-
   "Pop",
-
   "Classical",
-
   "Jazz",
-
   "International",
-
   "Instrumental",
-
   "Blues",
-
   "Experimental",
 ];
 
 function App() {
   const [songs, setSongs] = useState<Song[]>([]);
-
   const [page, setPage] = useState(1);
-
   const [totalPages, setTotalPages] = useState(1);
-
   const [searchInput, setSearchInput] = useState("");
-
   const [search, setSearch] = useState("");
-
   const [genre, setGenre] = useState("");
-
   const [loading, setLoading] = useState(true);
-
   const [error, setError] = useState("");
-
   const [user, setUser] = useState<User | null>(null);
-
   const [token, setToken] = useState(
     () => sessionStorage.getItem("token") ?? "",
   );
-
   const [authMode, setAuthMode] = useState<"login" | "register">("login");
-
   const [authEmail, setAuthEmail] = useState("");
-
   const [authUsername, setAuthUsername] = useState("");
-
   const [authPassword, setAuthPassword] = useState("");
-
   const [authError, setAuthError] = useState("");
-
   const [ratings, setRatings] = useState<Record<number, number>>({});
-
   const [ratingError, setRatingError] = useState("");
-
   const [ratingsLoaded, setRatingsLoaded] = useState(false);
-
   const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
-
   const [recommendationsLoading, setRecommendationsLoading] = useState(false);
-
   const [recommendationsError, setRecommendationsError] = useState("");
+  const meaningfulRatingCount = Object.values(ratings).filter(
+    (value) => value !== 3,
+  ).length;
 
   useEffect(() => {
     async function fetchSongs() {
@@ -660,12 +600,42 @@ function App() {
                 <div className="recommendations-empty">
                   <div className="empty-icon">♪</div>
 
-                  <h3>No recommendations yet</h3>
+                  {meaningfulRatingCount === 0 ? (
+                    <>
+                      <h3>Start by rating some songs</h3>
 
-                  <p>
-                    Rate a few songs to help the recommendation engine
-                    understand what you like.
-                  </p>
+                      <p>
+                        Give songs a rating above or below 3 stars so the
+                        recommendation engine can learn what you like and
+                        dislike.
+                      </p>
+
+                      <p className="empty-state-hint">
+                        Ratings of 3/5 are treated as neutral and do not
+                        strongly affect your recommendations.
+                      </p>
+                    </>
+                  ) : meaningfulRatingCount < 3 ? (
+                    <>
+                      <h3>Rate a few more songs</h3>
+
+                      <p>
+                        You have {meaningfulRatingCount} meaningful{" "}
+                        {meaningfulRatingCount === 1 ? "rating" : "ratings"} so
+                        far. A few more ratings will help produce stronger
+                        recommendations.
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <h3>No recommendations found</h3>
+
+                      <p>
+                        The engine has enough rating information, but it did not
+                        find any recommendation candidates right now.
+                      </p>
+                    </>
+                  )}
                 </div>
               )}
             {recommendations.length > 0 && (

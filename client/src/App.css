@@ -1043,6 +1043,14 @@ button:disabled {
   }
 }
 
+.empty-state-hint {
+  margin-top: 10px !important;
+
+  color: var(--text-muted);
+
+  font-size: 0.85rem;
+}
+
 @media (max-width: 620px) {
   .recommendations-header {
     flex-direction: column;
