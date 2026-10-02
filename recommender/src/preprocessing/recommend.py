@@ -10,7 +10,6 @@ from sqlalchemy import create_engine, text
 from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.preprocessing import StandardScaler
 
-
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 
 # Load the same database connection used by the Node backend.
@@ -109,6 +108,18 @@ def build_recommendations(user_id, limit=10):
     finally:
         engine.dispose()
 
+    return build_recommendations_from_data(
+        songs=songs,
+        ratings=ratings,
+        limit=limit,
+    )
+
+
+def build_recommendations_from_data(
+    songs,
+    ratings,
+    limit=10,
+):
     if ratings.empty:
         return pd.DataFrame()
 
@@ -147,8 +158,6 @@ def build_recommendations(user_id, limit=10):
         now - rated["updatedAt"]
     ).dt.total_seconds() / 86400
 
-    # Ratings lose half of their recency influence
-    # after about 180 days.
     half_life_days = 180
 
     rated["recency_weight"] = np.exp(
@@ -298,9 +307,9 @@ def build_recommendations(user_id, limit=10):
     else:
         usable_songs["negative_similarity"] = 0.0
 
-# --------------------------------------------------
-# GENRE PREFERENCE
-# --------------------------------------------------
+    # --------------------------------------------------
+    # GENRE PREFERENCE
+    # --------------------------------------------------
 
     genre_data = rated.dropna(
         subset=["genre"]
@@ -309,35 +318,33 @@ def build_recommendations(user_id, limit=10):
     genre_scores = {}
 
     for genre, group in genre_data.groupby("genre"):
-        ratings_array = group["value"].to_numpy()
+        ratings_array = (
+            group["value"]
+            .to_numpy()
+        )
 
         recency_weights = (
             group["recency_weight"]
             .to_numpy()
         )
 
-        # Calculate a recency-weighted average rating.
         weighted_average = np.average(
             ratings_array,
             weights=recency_weights,
         )
 
-        # Convert the 1-5 rating scale into 0-1.
         genre_scores[genre] = (
             weighted_average - 1
         ) / 4
-
 
     def get_genre_score(genre):
         if pd.isna(genre):
             return 0.5
 
-        # Genres the user has never rated are neutral.
         return genre_scores.get(
             genre,
             0.5,
         )
-
 
     usable_songs["genre_score"] = (
         usable_songs["genre"]
@@ -628,10 +635,6 @@ def build_recommendations(user_id, limit=10):
         .reset_index()
     )
 
-    # --------------------------------------------------
-    # RETURN RESULTS
-    # --------------------------------------------------
-
     return recommendations[
         [
             "id",
@@ -657,7 +660,6 @@ def main():
                 }
             )
         )
-
         sys.exit(1)
 
     try:
@@ -673,7 +675,6 @@ def main():
                 }
             )
         )
-
         sys.exit(1)
 
     recommendations = build_recommendations(
@@ -689,7 +690,6 @@ def main():
                 }
             )
         )
-
         return
 
     records = recommendations.to_dict(
