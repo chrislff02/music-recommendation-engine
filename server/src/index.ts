@@ -423,6 +423,302 @@ app.get(
 );
 
 app.get(
+  "/api/preferences",
+  requireAuth,
+  async (req: AuthenticatedRequest, res) => {
+    try {
+      if (!req.userId) {
+        return res.status(401).json({
+          error: "Authentication required",
+        });
+      }
+
+      const genresResult = await pool.query(
+        `
+        SELECT
+          g.id,
+          g.name
+        FROM "UserFavoriteGenre" ufg
+        JOIN "Genre" g
+          ON ufg."genreId" = g.id
+        WHERE ufg."userId" = $1
+        ORDER BY g.name
+        `,
+        [req.userId],
+      );
+
+      const artistsResult = await pool.query(
+        `
+        SELECT
+          a.id,
+          a.name
+        FROM "UserFavoriteArtist" ufa
+        JOIN "Artist" a
+          ON ufa."artistId" = a.id
+        WHERE ufa."userId" = $1
+        ORDER BY a.name
+        `,
+        [req.userId],
+      );
+
+      return res.json({
+        genres: genresResult.rows,
+        artists: artistsResult.rows,
+      });
+    } catch (error) {
+      console.error("Failed to fetch preferences:", error);
+
+      return res.status(500).json({
+        error: "Failed to fetch preferences",
+      });
+    }
+  },
+);
+
+app.put(
+  "/api/preferences",
+  requireAuth,
+  async (req: AuthenticatedRequest, res) => {
+    const client = await pool.connect();
+
+    try {
+      if (!req.userId) {
+        return res.status(401).json({
+          error: "Authentication required",
+        });
+      }
+
+      const { genreIds, artistIds } = req.body;
+
+      if (!Array.isArray(genreIds) || !Array.isArray(artistIds)) {
+        return res.status(400).json({
+          error: "genreIds and artistIds must be arrays",
+        });
+      }
+
+      const normalizedGenreIds = [...new Set(genreIds.map(Number))];
+
+      const normalizedArtistIds = [...new Set(artistIds.map(Number))];
+
+      const invalidGenreId = normalizedGenreIds.some(
+        (id) => !Number.isInteger(id) || id <= 0,
+      );
+
+      const invalidArtistId = normalizedArtistIds.some(
+        (id) => !Number.isInteger(id) || id <= 0,
+      );
+
+      if (invalidGenreId || invalidArtistId) {
+        return res.status(400).json({
+          error: "Preference IDs must be positive integers",
+        });
+      }
+
+      await client.query("BEGIN");
+
+      if (normalizedGenreIds.length > 0) {
+        const genreCheck = await client.query(
+          `
+          SELECT id
+          FROM "Genre"
+          WHERE id = ANY($1::int[])
+          `,
+          [normalizedGenreIds],
+        );
+
+        if (genreCheck.rows.length !== normalizedGenreIds.length) {
+          await client.query("ROLLBACK");
+
+          return res.status(400).json({
+            error: "One or more genre IDs are invalid",
+          });
+        }
+      }
+
+      if (normalizedArtistIds.length > 0) {
+        const artistCheck = await client.query(
+          `
+          SELECT id
+          FROM "Artist"
+          WHERE id = ANY($1::int[])
+          `,
+          [normalizedArtistIds],
+        );
+
+        if (artistCheck.rows.length !== normalizedArtistIds.length) {
+          await client.query("ROLLBACK");
+
+          return res.status(400).json({
+            error: "One or more artist IDs are invalid",
+          });
+        }
+      }
+
+      await client.query(
+        `
+        DELETE FROM "UserFavoriteGenre"
+        WHERE "userId" = $1
+        `,
+        [req.userId],
+      );
+
+      await client.query(
+        `
+        DELETE FROM "UserFavoriteArtist"
+        WHERE "userId" = $1
+        `,
+        [req.userId],
+      );
+
+      for (const genreId of normalizedGenreIds) {
+        await client.query(
+          `
+          INSERT INTO "UserFavoriteGenre" (
+            "userId",
+            "genreId"
+          )
+          VALUES ($1, $2)
+          `,
+          [req.userId, genreId],
+        );
+      }
+
+      for (const artistId of normalizedArtistIds) {
+        await client.query(
+          `
+          INSERT INTO "UserFavoriteArtist" (
+            "userId",
+            "artistId"
+          )
+          VALUES ($1, $2)
+          `,
+          [req.userId, artistId],
+        );
+      }
+
+      await client.query("COMMIT");
+
+      const genresResult = await pool.query(
+        `
+        SELECT
+          g.id,
+          g.name
+        FROM "UserFavoriteGenre" ufg
+        JOIN "Genre" g
+          ON ufg."genreId" = g.id
+        WHERE ufg."userId" = $1
+        ORDER BY g.name
+        `,
+        [req.userId],
+      );
+
+      const artistsResult = await pool.query(
+        `
+        SELECT
+          a.id,
+          a.name
+        FROM "UserFavoriteArtist" ufa
+        JOIN "Artist" a
+          ON ufa."artistId" = a.id
+        WHERE ufa."userId" = $1
+        ORDER BY a.name
+        `,
+        [req.userId],
+      );
+
+      return res.json({
+        genres: genresResult.rows,
+        artists: artistsResult.rows,
+      });
+    } catch (error) {
+      await client.query("ROLLBACK");
+
+      console.error("Failed to update preferences:", error);
+
+      return res.status(500).json({
+        error: "Failed to update preferences",
+      });
+    } finally {
+      client.release();
+    }
+  },
+);
+
+app.get("/api/genres", async (_req, res) => {
+  try {
+    const result = await pool.query(
+      `
+      SELECT
+        id,
+        name
+      FROM "Genre"
+      ORDER BY name
+      `,
+    );
+
+    return res.json({
+      genres: result.rows,
+    });
+  } catch (error) {
+    console.error("Failed to fetch genres:", error);
+
+    return res.status(500).json({
+      error: "Failed to fetch genres",
+    });
+  }
+});
+
+app.get("/api/artists", async (req, res) => {
+  try {
+    const search =
+      typeof req.query.search === "string" ? req.query.search.trim() : "";
+
+    const limitValue =
+      typeof req.query.limit === "string" ? Number(req.query.limit) : 50;
+
+    const limit = Number.isInteger(limitValue)
+      ? Math.min(Math.max(limitValue, 1), 100)
+      : 50;
+
+    const values: unknown[] = [];
+
+    let query = `
+      SELECT
+        id,
+        name
+      FROM "Artist"
+    `;
+
+    if (search) {
+      values.push(`%${search}%`);
+
+      query += `
+        WHERE name ILIKE $${values.length}
+      `;
+    }
+
+    values.push(limit);
+
+    query += `
+      ORDER BY name
+      LIMIT $${values.length}
+    `;
+
+    const result = await pool.query(query, values);
+
+    return res.json({
+      artists: result.rows,
+    });
+  } catch (error) {
+    console.error("Failed to fetch artists:", error);
+
+    return res.status(500).json({
+      error: "Failed to fetch artists",
+    });
+  }
+});
+
+app.get(
   "/api/recommendations",
   requireAuth,
   async (req: AuthenticatedRequest, res) => {

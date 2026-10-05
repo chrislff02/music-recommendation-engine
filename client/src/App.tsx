@@ -57,6 +57,24 @@ type RecommendationsResponse = {
   recommendations: Recommendation[];
 };
 
+type PreferenceItem = {
+  id: number;
+  name: string;
+};
+
+type PreferencesResponse = {
+  genres: PreferenceItem[];
+  artists: PreferenceItem[];
+};
+
+type GenresResponse = {
+  genres: PreferenceItem[];
+};
+
+type ArtistsResponse = {
+  artists: PreferenceItem[];
+};
+
 const GENRES = [
   "",
   "Rock",
@@ -103,6 +121,24 @@ function App() {
   const [activeSection, setActiveSection] = useState<
     "home" | "recommendations" | "browse"
   >("home");
+  const [preferencesLoaded, setPreferencesLoaded] = useState(false);
+  const [preferencesOpen, setPreferencesOpen] = useState(false);
+  const [savedFavoriteGenres, setSavedFavoriteGenres] = useState<
+    PreferenceItem[]
+  >([]);
+  const [savedFavoriteArtists, setSavedFavoriteArtists] = useState<
+    PreferenceItem[]
+  >([]);
+  const [selectedGenreIds, setSelectedGenreIds] = useState<number[]>([]);
+  const [selectedArtists, setSelectedArtists] = useState<PreferenceItem[]>([]);
+  const [availableGenres, setAvailableGenres] = useState<PreferenceItem[]>([]);
+  const [artistSearchInput, setArtistSearchInput] = useState("");
+  const [artistSearchResults, setArtistSearchResults] = useState<
+    PreferenceItem[]
+  >([]);
+  const [artistSearchLoading, setArtistSearchLoading] = useState(false);
+  const [preferencesSaving, setPreferencesSaving] = useState(false);
+  const [preferencesError, setPreferencesError] = useState("");
   const meaningfulRatingCount = Object.values(ratings).filter(
     (value) => value !== 3,
   ).length;
@@ -213,6 +249,134 @@ function App() {
     fetchCurrentUser();
   }, [token]);
 
+  useEffect(() => {
+    if (!user || !token) {
+      setPreferencesLoaded(false);
+      setPreferencesOpen(false);
+      setSavedFavoriteGenres([]);
+      setSavedFavoriteArtists([]);
+      setSelectedGenreIds([]);
+      setSelectedArtists([]);
+      setAvailableGenres([]);
+      return;
+    }
+
+    async function fetchPreferences() {
+      try {
+        setPreferencesLoaded(false);
+        setPreferencesError("");
+
+        const [preferencesResponse, genresResponse] = await Promise.all([
+          fetch("http://localhost:5001/api/preferences", {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }),
+
+          fetch("http://localhost:5001/api/genres"),
+        ]);
+
+        if (!preferencesResponse.ok) {
+          throw new Error("Failed to load your music preferences");
+        }
+
+        if (!genresResponse.ok) {
+          throw new Error("Failed to load genres");
+        }
+
+        const preferencesData: PreferencesResponse =
+          await preferencesResponse.json();
+
+        const genresData: GenresResponse = await genresResponse.json();
+
+        setSavedFavoriteGenres(preferencesData.genres);
+        setSavedFavoriteArtists(preferencesData.artists);
+
+        setSelectedGenreIds(
+          preferencesData.genres.map((genreItem) => genreItem.id),
+        );
+
+        setSelectedArtists(preferencesData.artists);
+
+        setAvailableGenres(genresData.genres);
+
+        const hasPreferences =
+          preferencesData.genres.length > 0 ||
+          preferencesData.artists.length > 0;
+
+        setPreferencesOpen(!hasPreferences);
+        setPreferencesLoaded(true);
+      } catch (err) {
+        if (err instanceof Error) {
+          setPreferencesError(err.message);
+        } else {
+          setPreferencesError("Failed to load music preferences");
+        }
+
+        setPreferencesLoaded(true);
+      }
+    }
+
+    void fetchPreferences();
+  }, [user, token]);
+
+  useEffect(() => {
+    if (!preferencesOpen) {
+      return;
+    }
+
+    const searchTerm = artistSearchInput.trim();
+
+    if (searchTerm.length < 2) {
+      setArtistSearchResults([]);
+      setArtistSearchLoading(false);
+      return;
+    }
+
+    const controller = new AbortController();
+
+    const timeoutId = window.setTimeout(async () => {
+      try {
+        setArtistSearchLoading(true);
+
+        const params = new URLSearchParams({
+          search: searchTerm,
+          limit: "12",
+        });
+
+        const response = await fetch(
+          `http://localhost:5001/api/artists?${params.toString()}`,
+          {
+            signal: controller.signal,
+          },
+        );
+
+        if (!response.ok) {
+          throw new Error("Failed to search artists");
+        }
+
+        const data: ArtistsResponse = await response.json();
+
+        setArtistSearchResults(data.artists);
+      } catch (err) {
+        if (err instanceof DOMException && err.name === "AbortError") {
+          return;
+        }
+
+        console.error(err);
+      } finally {
+        if (!controller.signal.aborted) {
+          setArtistSearchLoading(false);
+        }
+      }
+    }, 300);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+      controller.abort();
+    };
+  }, [artistSearchInput, preferencesOpen]);
+
   const fetchRecommendations = useCallback(async () => {
     if (!token) {
       return;
@@ -314,6 +478,125 @@ function App() {
       ...current,
       [songId]: !current[songId],
     }));
+  }
+
+  function toggleFavoriteGenre(genreId: number) {
+    setSelectedGenreIds((current) => {
+      if (current.includes(genreId)) {
+        return current.filter((id) => id !== genreId);
+      }
+
+      if (current.length >= 5) {
+        return current;
+      }
+
+      return [...current, genreId];
+    });
+  }
+
+  function addFavoriteArtist(artist: PreferenceItem) {
+    setSelectedArtists((current) => {
+      if (current.some((item) => item.id === artist.id)) {
+        return current;
+      }
+
+      if (current.length >= 5) {
+        return current;
+      }
+
+      return [...current, artist];
+    });
+  }
+
+  function removeFavoriteArtist(artistId: number) {
+    setSelectedArtists((current) =>
+      current.filter((artist) => artist.id !== artistId),
+    );
+  }
+
+  function openTasteProfile() {
+    setSelectedGenreIds(savedFavoriteGenres.map((genreItem) => genreItem.id));
+
+    setSelectedArtists(savedFavoriteArtists);
+
+    setArtistSearchInput("");
+    setArtistSearchResults([]);
+    setPreferencesError("");
+    setPreferencesOpen(true);
+  }
+
+  function cancelTasteProfile() {
+    setSelectedGenreIds(savedFavoriteGenres.map((genreItem) => genreItem.id));
+
+    setSelectedArtists(savedFavoriteArtists);
+
+    setArtistSearchInput("");
+    setArtistSearchResults([]);
+    setPreferencesError("");
+    setPreferencesOpen(false);
+  }
+
+  async function saveTasteProfile() {
+    if (!token) {
+      return;
+    }
+
+    if (selectedGenreIds.length === 0 && selectedArtists.length === 0) {
+      setPreferencesError("Choose at least one favorite genre or artist.");
+
+      return;
+    }
+
+    try {
+      setPreferencesSaving(true);
+      setPreferencesError("");
+
+      const response = await fetch("http://localhost:5001/api/preferences", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          genreIds: selectedGenreIds,
+          artistIds: selectedArtists.map((artist) => artist.id),
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error ?? "Failed to save music preferences");
+      }
+
+      const preferencesData = data as PreferencesResponse;
+
+      setSavedFavoriteGenres(preferencesData.genres);
+      setSavedFavoriteArtists(preferencesData.artists);
+
+      setSelectedGenreIds(
+        preferencesData.genres.map((genreItem) => genreItem.id),
+      );
+
+      setSelectedArtists(preferencesData.artists);
+
+      setArtistSearchInput("");
+      setArtistSearchResults([]);
+
+      setPreferencesOpen(false);
+
+      if (meaningfulRatingCount > 0) {
+        await fetchRecommendations();
+      }
+    } catch (err) {
+      if (err instanceof Error) {
+        setPreferencesError(err.message);
+      } else {
+        setPreferencesError("Failed to save music preferences");
+      }
+    } finally {
+      setPreferencesSaving(false);
+    }
   }
 
   function handleSearch(event: React.FormEvent<HTMLFormElement>) {
@@ -462,14 +745,26 @@ function App() {
     sessionStorage.removeItem("token");
 
     setToken("");
-
     setUser(null);
-
     setRatings({});
-
     setRatingsLoaded(false);
-
     setRecommendations([]);
+
+    setPreferencesLoaded(false);
+    setPreferencesOpen(false);
+
+    setSavedFavoriteGenres([]);
+    setSavedFavoriteArtists([]);
+
+    setSelectedGenreIds([]);
+    setSelectedArtists([]);
+
+    setAvailableGenres([]);
+
+    setArtistSearchInput("");
+    setArtistSearchResults([]);
+
+    setPreferencesError("");
   }
 
   return (
@@ -532,9 +827,18 @@ function App() {
 
               <div className="sidebar-user-info">
                 <span>Signed in as</span>
-
                 <strong>{user.username}</strong>
               </div>
+
+              {preferencesLoaded && (
+                <button
+                  type="button"
+                  className="sidebar-taste-button"
+                  onClick={openTasteProfile}
+                >
+                  Edit Taste Profile
+                </button>
+              )}
 
               <button
                 type="button"
@@ -630,6 +934,195 @@ function App() {
           </section>
         )}
 
+        {user && preferencesLoaded && preferencesOpen && (
+          <section className="onboarding-section">
+            <div className="onboarding-card">
+              <div className="onboarding-header">
+                <div>
+                  <p className="eyebrow">Personalize Your Experience</p>
+
+                  <h2>Build Your Taste Profile</h2>
+
+                  <p>
+                    Choose some genres and artists you enjoy. These preferences
+                    help MusicMatch personalize recommendations while it learns
+                    from your ratings.
+                  </p>
+                </div>
+
+                {savedFavoriteGenres.length > 0 ||
+                savedFavoriteArtists.length > 0 ? (
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    onClick={cancelTasteProfile}
+                  >
+                    Cancel
+                  </button>
+                ) : null}
+              </div>
+
+              <div className="onboarding-block">
+                <div className="onboarding-block-heading">
+                  <div>
+                    <h3>Favorite Genres</h3>
+
+                    <p>Choose up to 5 genres.</p>
+                  </div>
+
+                  <span>{selectedGenreIds.length}/5</span>
+                </div>
+
+                <div className="preference-chip-grid">
+                  {availableGenres.map((genreItem) => {
+                    const selected = selectedGenreIds.includes(genreItem.id);
+
+                    const disabled = !selected && selectedGenreIds.length >= 5;
+
+                    return (
+                      <button
+                        key={genreItem.id}
+                        type="button"
+                        disabled={disabled}
+                        className={
+                          selected
+                            ? "preference-chip selected"
+                            : "preference-chip"
+                        }
+                        onClick={() => toggleFavoriteGenre(genreItem.id)}
+                      >
+                        {selected && (
+                          <span className="preference-check">✓</span>
+                        )}
+
+                        {genreItem.name}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="onboarding-block">
+                <div className="onboarding-block-heading">
+                  <div>
+                    <h3>Favorite Artists</h3>
+
+                    <p>Search for artists and choose up to 5.</p>
+                  </div>
+
+                  <span>{selectedArtists.length}/5</span>
+                </div>
+
+                {selectedArtists.length > 0 && (
+                  <div className="selected-artists">
+                    {selectedArtists.map((artist) => (
+                      <button
+                        key={artist.id}
+                        type="button"
+                        className="selected-artist-chip"
+                        onClick={() => removeFavoriteArtist(artist.id)}
+                        title={`Remove ${artist.name}`}
+                      >
+                        <span>{artist.name}</span>
+                        <span aria-hidden="true">×</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                <div className="artist-search">
+                  <input
+                    type="text"
+                    placeholder="Search artists..."
+                    value={artistSearchInput}
+                    onChange={(event) =>
+                      setArtistSearchInput(event.target.value)
+                    }
+                  />
+
+                  {artistSearchInput.trim().length > 0 &&
+                    artistSearchInput.trim().length < 2 && (
+                      <p className="artist-search-hint">
+                        Type at least 2 characters.
+                      </p>
+                    )}
+
+                  {artistSearchLoading && (
+                    <p className="artist-search-hint">Searching artists...</p>
+                  )}
+
+                  {!artistSearchLoading &&
+                    artistSearchInput.trim().length >= 2 &&
+                    artistSearchResults.length === 0 && (
+                      <p className="artist-search-hint">No artists found.</p>
+                    )}
+
+                  {artistSearchResults.length > 0 && (
+                    <div className="artist-search-results">
+                      {artistSearchResults.map((artist) => {
+                        const selected = selectedArtists.some(
+                          (item) => item.id === artist.id,
+                        );
+
+                        const disabled =
+                          !selected && selectedArtists.length >= 5;
+
+                        return (
+                          <button
+                            key={artist.id}
+                            type="button"
+                            disabled={disabled}
+                            className={
+                              selected
+                                ? "artist-result selected"
+                                : "artist-result"
+                            }
+                            onClick={() =>
+                              selected
+                                ? removeFavoriteArtist(artist.id)
+                                : addFavoriteArtist(artist)
+                            }
+                          >
+                            <span>{artist.name}</span>
+
+                            <span>{selected ? "Selected" : "+"}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {preferencesError && (
+                <p className="error-message">{preferencesError}</p>
+              )}
+
+              <div className="onboarding-actions">
+                <div>
+                  <strong>
+                    {selectedGenreIds.length + selectedArtists.length} selected
+                  </strong>
+
+                  <span>
+                    Your ratings will still become more important as MusicMatch
+                    learns your taste.
+                  </span>
+                </div>
+
+                <button
+                  type="button"
+                  className="primary-button"
+                  disabled={preferencesSaving}
+                  onClick={saveTasteProfile}
+                >
+                  {preferencesSaving ? "Saving..." : "Save Taste Profile"}
+                </button>
+              </div>
+            </div>
+          </section>
+        )}
+
         {user && (
           <section className="recommendations-section" id="recommendations">
             {" "}
@@ -673,12 +1166,18 @@ function App() {
 
                   {meaningfulRatingCount === 0 ? (
                     <>
-                      <h3>Start by rating some songs</h3>
+                      <h3>
+                        {savedFavoriteGenres.length > 0 ||
+                        savedFavoriteArtists.length > 0
+                          ? "Your taste profile is ready"
+                          : "Start by building your taste profile"}
+                      </h3>
 
                       <p>
-                        Give songs a rating above or below 3 stars so the
-                        recommendation engine can learn what you like and
-                        dislike.
+                        {savedFavoriteGenres.length > 0 ||
+                        savedFavoriteArtists.length > 0
+                          ? "Now rate a few songs above or below 3 stars so MusicMatch can combine your favorite genres and artists with your listening preferences."
+                          : "Choose some favorite genres or artists above, then rate a few songs so MusicMatch can start learning what you like."}
                       </p>
 
                       <p className="empty-state-hint">
