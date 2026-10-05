@@ -97,6 +97,9 @@ function App() {
   const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
   const [recommendationsLoading, setRecommendationsLoading] = useState(false);
   const [recommendationsError, setRecommendationsError] = useState("");
+  const [activeSection, setActiveSection] = useState<
+    "home" | "recommendations" | "browse"
+  >("home");
   const meaningfulRatingCount = Object.values(ratings).filter(
     (value) => value !== 3,
   ).length;
@@ -261,6 +264,47 @@ function App() {
 
     void fetchRecommendations();
   }, [user, ratings, ratingsLoaded, fetchRecommendations]);
+
+  useEffect(() => {
+    const sectionIds = ["home", "recommendations", "browse"];
+
+    const sections = sectionIds
+      .map((id) => document.getElementById(id))
+      .filter((section): section is HTMLElement => section !== null);
+
+    if (sections.length === 0) {
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const visibleEntries = entries
+          .filter((entry) => entry.isIntersecting)
+          .sort((a, b) => b.intersectionRatio - a.intersectionRatio);
+
+        if (visibleEntries.length === 0) {
+          return;
+        }
+
+        const id = visibleEntries[0].target.id;
+
+        if (id === "home" || id === "recommendations" || id === "browse") {
+          setActiveSection(id);
+        }
+      },
+      {
+        root: null,
+        rootMargin: "-20% 0px -55% 0px",
+        threshold: [0.1, 0.25, 0.5, 0.75],
+      },
+    );
+
+    sections.forEach((section) => observer.observe(section));
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [user]);
 
   function handleSearch(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -432,19 +476,36 @@ function App() {
         </div>
 
         <nav className="sidebar-nav">
-          <a className="nav-item active" href="#home">
+          <a
+            className={
+              activeSection === "home" ? "nav-item active" : "nav-item"
+            }
+            href="#home"
+          >
             <span className="nav-icon">⌂</span>
             Home
           </a>
 
           {user && (
-            <a className="nav-item" href="#recommendations">
+            <a
+              className={
+                activeSection === "recommendations"
+                  ? "nav-item active"
+                  : "nav-item"
+              }
+              href="#recommendations"
+            >
               <span className="nav-icon">★</span>
               For You
             </a>
           )}
 
-          <a className="nav-item" href="#browse">
+          <a
+            className={
+              activeSection === "browse" ? "nav-item active" : "nav-item"
+            }
+            href="#browse"
+          >
             <span className="nav-icon">⌕</span>
             Browse
           </a>

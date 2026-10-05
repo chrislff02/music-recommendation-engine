@@ -205,7 +205,12 @@ body {
 }
 
 .nav-item.active {
+  background: var(--surface-light);
   color: var(--text);
+}
+
+.nav-item.active .nav-icon {
+  color: var(--accent);
 }
 
 .nav-icon {
