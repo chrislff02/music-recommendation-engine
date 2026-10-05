@@ -97,6 +97,9 @@ function App() {
   const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
   const [recommendationsLoading, setRecommendationsLoading] = useState(false);
   const [recommendationsError, setRecommendationsError] = useState("");
+  const [expandedRecommendations, setExpandedRecommendations] = useState<
+    Record<number, boolean>
+  >({});
   const [activeSection, setActiveSection] = useState<
     "home" | "recommendations" | "browse"
   >("home");
@@ -305,6 +308,13 @@ function App() {
       observer.disconnect();
     };
   }, [user]);
+
+  function toggleRecommendationDetails(songId: number) {
+    setExpandedRecommendations((current) => ({
+      ...current,
+      [songId]: !current[songId],
+    }));
+  }
 
   function handleSearch(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -724,6 +734,110 @@ function App() {
                     <p className="recommendation-explanation">
                       {song.explanation}
                     </p>
+
+                    <div className="recommendation-details-wrapper">
+                      <button
+                        type="button"
+                        className="recommendation-details-toggle"
+                        onClick={() => toggleRecommendationDetails(song.id)}
+                      >
+                        <span>Why this recommendation</span>
+
+                        <span
+                          className={
+                            expandedRecommendations[song.id]
+                              ? "details-chevron expanded"
+                              : "details-chevron"
+                          }
+                        >
+                          ▾
+                        </span>
+                      </button>
+
+                      {expandedRecommendations[song.id] && (
+                        <div className="recommendation-details">
+                          <div className="recommendation-detail-row">
+                            <span>Audio similarity</span>
+
+                            <strong>
+                              {(song.positive_similarity * 100).toFixed(0)}%
+                            </strong>
+                          </div>
+
+                          <div className="recommendation-detail-bar">
+                            <div
+                              className="recommendation-detail-fill"
+                              style={{
+                                width: `${Math.min(
+                                  Math.max(song.positive_similarity * 100, 0),
+                                  100,
+                                )}%`,
+                              }}
+                            />
+                          </div>
+
+                          <div className="recommendation-detail-row">
+                            <span>Genre preference</span>
+
+                            <strong>
+                              {(song.genre_score * 100).toFixed(0)}%
+                            </strong>
+                          </div>
+
+                          <div className="recommendation-detail-bar">
+                            <div
+                              className="recommendation-detail-fill"
+                              style={{
+                                width: `${Math.min(
+                                  Math.max(song.genre_score * 100, 0),
+                                  100,
+                                )}%`,
+                              }}
+                            />
+                          </div>
+
+                          <div className="recommendation-detail-row">
+                            <span>Popularity</span>
+
+                            <strong>
+                              {(song.popularity * 100).toFixed(0)}%
+                            </strong>
+                          </div>
+
+                          <div className="recommendation-detail-bar">
+                            <div
+                              className="recommendation-detail-fill"
+                              style={{
+                                width: `${Math.min(
+                                  Math.max(song.popularity * 100, 0),
+                                  100,
+                                )}%`,
+                              }}
+                            />
+                          </div>
+
+                          <div className="recommendation-detail-row">
+                            <span>Similarity to disliked songs</span>
+
+                            <strong>
+                              {(song.negative_similarity * 100).toFixed(0)}%
+                            </strong>
+                          </div>
+
+                          <div className="recommendation-detail-bar negative">
+                            <div
+                              className="recommendation-detail-fill negative"
+                              style={{
+                                width: `${Math.min(
+                                  Math.max(song.negative_similarity * 100, 0),
+                                  100,
+                                )}%`,
+                              }}
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </div>
 
                     <div className="recommendation-rating">
                       <div>
