@@ -29,6 +29,27 @@ FEATURE_COLUMNS = [
 ]
 
 
+RETURN_COLUMNS = [
+    "id",
+    "title",
+    "artist",
+    "genre",
+    "positive_similarity",
+    "negative_similarity",
+    "genre_score",
+    "favorite_genre_score",
+    "favorite_artist_score",
+    "popularity",
+    "score",
+    "explanation",
+]
+
+
+# --------------------------------------------------
+# DATABASE LOADERS
+# --------------------------------------------------
+
+
 def load_songs(engine):
     query = text(
         """
@@ -127,61 +148,16 @@ def load_favorite_artists(engine, user_id):
     )
 
 
-def build_recommendations(user_id, limit=10):
-    database_url = os.getenv("DATABASE_URL")
-
-    if not database_url:
-        raise RuntimeError("DATABASE_URL is not defined")
-
-    engine = create_engine(
-        database_url.replace(
-            "postgresql://",
-            "postgresql+psycopg://",
-            1,
-        )
-    )
-
-    try:
-        songs = load_songs(engine)
-
-        ratings = load_ratings(
-            engine,
-            user_id,
-        )
-
-        favorite_genres = load_favorite_genres(
-            engine,
-            user_id,
-        )
-
-        favorite_artists = load_favorite_artists(
-            engine,
-            user_id,
-        )
-
-    finally:
-        engine.dispose()
-
-    return build_recommendations_from_data(
-        songs=songs,
-        ratings=ratings,
-        favorite_genres=favorite_genres,
-        favorite_artists=favorite_artists,
-        limit=limit,
-    )
+# --------------------------------------------------
+# HELPERS
+# --------------------------------------------------
 
 
-def build_recommendations_from_data(
-    songs,
-    ratings,
-    favorite_genres=None,
-    favorite_artists=None,
-    limit=10,
+def prepare_onboarding_preferences(
+    usable_songs,
+    favorite_genres,
+    favorite_artists,
 ):
-    # --------------------------------------------------
-    # DEFAULT OPTIONAL DATA
-    # --------------------------------------------------
-
     if favorite_genres is None:
         favorite_genres = pd.DataFrame(
             columns=["genre"]
@@ -191,34 +167,6 @@ def build_recommendations_from_data(
         favorite_artists = pd.DataFrame(
             columns=["artist"]
         )
-
-    if ratings.empty:
-        return pd.DataFrame()
-
-    # --------------------------------------------------
-    # PREPARE SONG DATA
-    # --------------------------------------------------
-
-    usable_songs = songs.dropna(
-        subset=FEATURE_COLUMNS
-    ).copy()
-
-    if usable_songs.empty:
-        return pd.DataFrame()
-
-    rated = ratings.merge(
-        usable_songs,
-        left_on="songId",
-        right_on="id",
-        how="inner",
-    )
-
-    if rated.empty:
-        return pd.DataFrame()
-
-    # --------------------------------------------------
-    # ONBOARDING PREFERENCES
-    # --------------------------------------------------
 
     favorite_genre_names = set(
         favorite_genres["genre"]
@@ -231,6 +179,8 @@ def build_recommendations_from_data(
         .dropna()
         .astype(str)
     )
+
+    usable_songs = usable_songs.copy()
 
     usable_songs["favorite_genre_score"] = (
         usable_songs["genre"]
@@ -256,6 +206,177 @@ def build_recommendations_from_data(
         )
     )
 
+    has_onboarding_preferences = (
+        bool(favorite_genre_names)
+        or bool(favorite_artist_names)
+    )
+
+    return (
+        usable_songs,
+        favorite_genre_names,
+        favorite_artist_names,
+        has_onboarding_preferences,
+    )
+
+
+def build_cold_start_recommendations(
+    usable_songs,
+    rated_song_ids,
+    limit,
+):
+    recommendations = usable_songs[
+        ~usable_songs["id"].isin(
+            rated_song_ids
+        )
+    ].copy()
+
+    if recommendations.empty:
+        return pd.DataFrame()
+
+    recommendations["positive_similarity"] = 0.5
+    recommendations["negative_similarity"] = 0.0
+    recommendations["genre_score"] = 0.5
+
+    onboarding_score = (
+        recommendations["favorite_genre_score"] * 0.60
+        + recommendations["favorite_artist_score"] * 0.40
+    )
+
+    # Onboarding drives most of a new user's score.
+    # Popularity gives reasonable ordering among otherwise
+    # similar cold-start candidates.
+    recommendations["score"] = (
+        onboarding_score * 0.80
+        + recommendations["popularity"].fillna(0) * 0.20
+    )
+
+    recommendations["score"] = (
+        recommendations["score"]
+        .clip(0, 1)
+    )
+
+    def build_explanation(row):
+        reasons = []
+
+        if row["favorite_artist_score"] > 0:
+            reasons.append(
+                f"{row['artist']} is one of your favorite artists."
+            )
+
+        if row["favorite_genre_score"] > 0:
+            reasons.append(
+                f"You selected {row['genre']} as a favorite genre."
+            )
+
+        if not reasons:
+            reasons.append(
+                "This song is being suggested while "
+                "MusicMatch learns your taste."
+            )
+
+        return " ".join(
+            reasons
+        )
+
+    recommendations["explanation"] = (
+        recommendations.apply(
+            build_explanation,
+            axis=1,
+        )
+    )
+
+    recommendations = (
+        recommendations
+        .sort_values(
+            by=[
+                "score",
+                "popularity",
+            ],
+            ascending=[
+                False,
+                False,
+            ],
+        )
+        .head(limit)
+        .copy()
+    )
+
+    return recommendations[
+        RETURN_COLUMNS
+    ]
+
+
+# --------------------------------------------------
+# RECOMMENDATION ENGINE
+# --------------------------------------------------
+
+
+def build_recommendations_from_data(
+    songs,
+    ratings,
+    favorite_genres=None,
+    favorite_artists=None,
+    limit=10,
+):
+    # --------------------------------------------------
+    # PREPARE SONG DATA
+    # --------------------------------------------------
+
+    usable_songs = songs.dropna(
+        subset=FEATURE_COLUMNS
+    ).copy()
+
+    if usable_songs.empty:
+        return pd.DataFrame()
+
+    (
+        usable_songs,
+        favorite_genre_names,
+        favorite_artist_names,
+        has_onboarding_preferences,
+    ) = prepare_onboarding_preferences(
+        usable_songs=usable_songs,
+        favorite_genres=favorite_genres,
+        favorite_artists=favorite_artists,
+    )
+
+    # --------------------------------------------------
+    # NO RATINGS: PURE COLD START
+    # --------------------------------------------------
+
+    if ratings.empty:
+        if not has_onboarding_preferences:
+            return pd.DataFrame()
+
+        return build_cold_start_recommendations(
+            usable_songs=usable_songs,
+            rated_song_ids=set(),
+            limit=limit,
+        )
+
+    # --------------------------------------------------
+    # MATCH RATINGS TO SONG DATA
+    # --------------------------------------------------
+
+    rated = ratings.merge(
+        usable_songs,
+        left_on="songId",
+        right_on="id",
+        how="inner",
+    )
+
+    if rated.empty:
+        if has_onboarding_preferences:
+            return build_cold_start_recommendations(
+                usable_songs=usable_songs,
+                rated_song_ids=set(
+                    ratings["songId"]
+                ),
+                limit=limit,
+            )
+
+        return pd.DataFrame()
+
     # --------------------------------------------------
     # RATING RECENCY
     # --------------------------------------------------
@@ -273,7 +394,7 @@ def build_recommendations_from_data(
         now - rated["updatedAt"]
     ).dt.total_seconds() / 86400
 
-    # Prevent future timestamps from increasing influence.
+    # Future timestamps should never increase weight.
     rated["age_days"] = (
         rated["age_days"]
         .clip(lower=0)
@@ -304,7 +425,7 @@ def build_recommendations_from_data(
     )
 
     # --------------------------------------------------
-    # SEPARATE LIKES AND DISLIKES
+    # SEPARATE LIKES / DISLIKES / NEUTRAL
     # --------------------------------------------------
 
     liked = rated[
@@ -315,9 +436,23 @@ def build_recommendations_from_data(
         rated["value"] <= 2
     ].copy()
 
-    # A rating of 3 is neutral, so if the user has only
-    # neutral ratings there is no preference profile yet.
-    if liked.empty and disliked.empty:
+    meaningful_rating_count = (
+        len(liked)
+        + len(disliked)
+    )
+
+    # If every rating is neutral, onboarding can still
+    # provide cold-start recommendations.
+    if meaningful_rating_count == 0:
+        if has_onboarding_preferences:
+            return build_cold_start_recommendations(
+                usable_songs=usable_songs,
+                rated_song_ids=set(
+                    ratings["songId"]
+                ),
+                limit=limit,
+            )
+
         return pd.DataFrame()
 
     # --------------------------------------------------
@@ -419,7 +554,6 @@ def build_recommendations_from_data(
         ) / 2
 
     else:
-        # Neutral value when there is no positive profile.
         usable_songs["positive_similarity"] = 0.5
 
     if negative_profile is not None:
@@ -433,12 +567,10 @@ def build_recommendations_from_data(
         ) / 2
 
     else:
-        # No disliked-song penalty if the user has not
-        # supplied negative preference information.
         usable_songs["negative_similarity"] = 0.0
 
     # --------------------------------------------------
-    # GENRE PREFERENCE FROM RATINGS
+    # GENRE PREFERENCE LEARNED FROM RATINGS
     # --------------------------------------------------
 
     genre_data = rated.dropna(
@@ -463,7 +595,6 @@ def build_recommendations_from_data(
             weights=recency_weights,
         )
 
-        # Convert 1-5 ratings to approximately 0-1.
         genre_scores[genre_name] = (
             weighted_average - 1
         ) / 4
@@ -472,7 +603,6 @@ def build_recommendations_from_data(
         if pd.isna(genre_name):
             return 0.5
 
-        # Genres never rated by the user stay neutral.
         return genre_scores.get(
             genre_name,
             0.5,
@@ -504,12 +634,7 @@ def build_recommendations_from_data(
     # PERSONALIZATION CONFIDENCE
     # --------------------------------------------------
 
-    # Only meaningful ratings should increase confidence.
-    # Neutral 3/5 ratings do not describe likes/dislikes.
-    meaningful_rating_count = (
-        len(liked) + len(disliked)
-    )
-
+    # Ratings gradually replace onboarding preferences.
     confidence = min(
         meaningful_rating_count / 10,
         1.0,
@@ -534,9 +659,6 @@ def build_recommendations_from_data(
         + recommendations["favorite_artist_score"] * 0.40
     )
 
-    # Ratings gradually take over as the user provides
-    # more meaningful feedback. Onboarding information is
-    # most useful while rating history is still sparse.
     recommendations["score"] = (
         rating_based_score * confidence
         + onboarding_score * onboarding_weight * 0.80
@@ -563,13 +685,11 @@ def build_recommendations_from_data(
     def build_explanation(row):
         reasons = []
 
-        # Favorite artist from onboarding.
         if row["favorite_artist_score"] > 0:
             reasons.append(
                 f"{row['artist']} is one of your favorite artists."
             )
 
-        # Favorite genre from onboarding.
         if row["favorite_genre_score"] > 0:
             reasons.append(
                 f"You selected {row['genre']} as a favorite genre."
@@ -731,18 +851,12 @@ def build_recommendations_from_data(
 
             rerank_score = (
                 candidate["score"]
-                - diversity_penalty
-                * redundancy
+                - diversity_penalty * redundancy
             )
 
             if rerank_score > best_rerank_score:
-                best_rerank_score = (
-                    rerank_score
-                )
-
-                best_song_id = (
-                    song_id
-                )
+                best_rerank_score = rerank_score
+                best_song_id = song_id
 
         if best_song_id is None:
             break
@@ -783,26 +897,72 @@ def build_recommendations_from_data(
         .reset_index()
     )
 
-    # --------------------------------------------------
-    # RETURN RESULTS
-    # --------------------------------------------------
-
     return recommendations[
-        [
-            "id",
-            "title",
-            "artist",
-            "genre",
-            "positive_similarity",
-            "negative_similarity",
-            "genre_score",
-            "favorite_genre_score",
-            "favorite_artist_score",
-            "popularity",
-            "score",
-            "explanation",
-        ]
+        RETURN_COLUMNS
     ]
+
+
+# --------------------------------------------------
+# DATABASE ENTRY POINT
+# --------------------------------------------------
+
+
+def build_recommendations(
+    user_id,
+    limit=10,
+):
+    database_url = os.getenv(
+        "DATABASE_URL"
+    )
+
+    if not database_url:
+        raise RuntimeError(
+            "DATABASE_URL is not defined"
+        )
+
+    engine = create_engine(
+        database_url.replace(
+            "postgresql://",
+            "postgresql+psycopg://",
+            1,
+        )
+    )
+
+    try:
+        songs = load_songs(
+            engine
+        )
+
+        ratings = load_ratings(
+            engine,
+            user_id,
+        )
+
+        favorite_genres = load_favorite_genres(
+            engine,
+            user_id,
+        )
+
+        favorite_artists = load_favorite_artists(
+            engine,
+            user_id,
+        )
+
+    finally:
+        engine.dispose()
+
+    return build_recommendations_from_data(
+        songs=songs,
+        ratings=ratings,
+        favorite_genres=favorite_genres,
+        favorite_artists=favorite_artists,
+        limit=limit,
+    )
+
+
+# --------------------------------------------------
+# COMMAND-LINE ENTRY POINT
+# --------------------------------------------------
 
 
 def main():

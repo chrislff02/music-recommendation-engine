@@ -871,3 +871,108 @@ def test_onboarding_influence_decreases_with_more_ratings():
     # Therefore onboarding has more influence for
     # a new/sparse user than an experienced user.
     assert sparse_boost > dense_boost
+
+def test_onboarding_only_can_generate_recommendations():
+    songs = pd.DataFrame(
+        [
+            make_song(
+                1,
+                "Rock Song",
+                "Artist A",
+                "Rock",
+                120,
+                0.8,
+                0.7,
+                0.7,
+                0.2,
+                0.1,
+                0.1,
+                0.2,
+                0.5,
+            ),
+            make_song(
+                2,
+                "Pop Song",
+                "Artist B",
+                "Pop",
+                120,
+                0.8,
+                0.7,
+                0.7,
+                0.2,
+                0.1,
+                0.1,
+                0.2,
+                0.5,
+            ),
+        ]
+    )
+
+    ratings = pd.DataFrame(
+        columns=[
+            "songId",
+            "value",
+            "updatedAt",
+        ]
+    )
+
+    favorite_genres = pd.DataFrame(
+        [{"genre": "Rock"}]
+    )
+
+    recommendations = build_recommendations_from_data(
+        songs=songs,
+        ratings=ratings,
+        favorite_genres=favorite_genres,
+        favorite_artists=pd.DataFrame(
+            columns=["artist"]
+        ),
+        limit=10,
+    )
+
+    assert not recommendations.empty
+    assert recommendations.iloc[0]["id"] == 1
+    assert recommendations.iloc[0]["favorite_genre_score"] == 1.0
+
+def test_no_ratings_and_no_preferences_returns_empty():
+    songs = pd.DataFrame(
+        [
+            make_song(
+                1,
+                "Song A",
+                "Artist A",
+                "Rock",
+                120,
+                0.8,
+                0.7,
+                0.7,
+                0.2,
+                0.1,
+                0.1,
+                0.2,
+                0.5,
+            ),
+        ]
+    )
+
+    ratings = pd.DataFrame(
+        columns=[
+            "songId",
+            "value",
+            "updatedAt",
+        ]
+    )
+
+    recommendations = build_recommendations_from_data(
+        songs=songs,
+        ratings=ratings,
+        favorite_genres=pd.DataFrame(
+            columns=["genre"]
+        ),
+        favorite_artists=pd.DataFrame(
+            columns=["artist"]
+        ),
+        limit=10,
+    )
+
+    assert recommendations.empty
