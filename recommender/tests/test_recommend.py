@@ -497,3 +497,377 @@ def test_empty_ratings_return_no_recommendations():
     )
 
     assert recommendations.empty
+
+def test_favorite_genre_boosts_recommendation():
+    songs = pd.DataFrame(
+        [
+            make_song(
+                1,
+                "Liked Song",
+                "Rated Artist",
+                "Rock",
+                120,
+                0.8,
+                0.7,
+                0.7,
+                0.2,
+                0.1,
+                0.1,
+                0.2,
+                0.5,
+            ),
+            make_song(
+                2,
+                "Favorite Genre Candidate",
+                "Artist A",
+                "Jazz",
+                120,
+                0.8,
+                0.7,
+                0.7,
+                0.2,
+                0.1,
+                0.1,
+                0.2,
+                0.5,
+            ),
+            make_song(
+                3,
+                "Other Genre Candidate",
+                "Artist B",
+                "Pop",
+                120,
+                0.8,
+                0.7,
+                0.7,
+                0.2,
+                0.1,
+                0.1,
+                0.2,
+                0.5,
+            ),
+        ]
+    )
+
+    ratings = pd.DataFrame(
+        [
+            {
+                "songId": 1,
+                "value": 5,
+                "updatedAt": pd.Timestamp.now(tz="UTC"),
+            }
+        ]
+    )
+
+    favorite_genres = pd.DataFrame(
+        [
+            {
+                "genre": "Jazz",
+            }
+        ]
+    )
+
+    recommendations = build_recommendations_from_data(
+        songs=songs,
+        ratings=ratings,
+        favorite_genres=favorite_genres,
+        favorite_artists=pd.DataFrame(
+            columns=["artist"]
+        ),
+        limit=10,
+    )
+
+    jazz_candidate = recommendations[
+        recommendations["id"] == 2
+    ].iloc[0]
+
+    pop_candidate = recommendations[
+        recommendations["id"] == 3
+    ].iloc[0]
+
+    assert jazz_candidate["favorite_genre_score"] == 1.0
+    assert pop_candidate["favorite_genre_score"] == 0.0
+
+    assert (
+        jazz_candidate["score"]
+        > pop_candidate["score"]
+    )
+
+    assert (
+        "favorite genre"
+        in jazz_candidate["explanation"].lower()
+    )
+
+
+def test_favorite_artist_boosts_recommendation():
+    songs = pd.DataFrame(
+        [
+            make_song(
+                1,
+                "Liked Song",
+                "Rated Artist",
+                "Rock",
+                120,
+                0.8,
+                0.7,
+                0.7,
+                0.2,
+                0.1,
+                0.1,
+                0.2,
+                0.5,
+            ),
+            make_song(
+                2,
+                "Favorite Artist Candidate",
+                "Favorite Artist",
+                "Rock",
+                120,
+                0.8,
+                0.7,
+                0.7,
+                0.2,
+                0.1,
+                0.1,
+                0.2,
+                0.5,
+            ),
+            make_song(
+                3,
+                "Other Artist Candidate",
+                "Other Artist",
+                "Rock",
+                120,
+                0.8,
+                0.7,
+                0.7,
+                0.2,
+                0.1,
+                0.1,
+                0.2,
+                0.5,
+            ),
+        ]
+    )
+
+    ratings = pd.DataFrame(
+        [
+            {
+                "songId": 1,
+                "value": 5,
+                "updatedAt": pd.Timestamp.now(tz="UTC"),
+            }
+        ]
+    )
+
+    favorite_artists = pd.DataFrame(
+        [
+            {
+                "artist": "Favorite Artist",
+            }
+        ]
+    )
+
+    recommendations = build_recommendations_from_data(
+        songs=songs,
+        ratings=ratings,
+        favorite_genres=pd.DataFrame(
+            columns=["genre"]
+        ),
+        favorite_artists=favorite_artists,
+        limit=10,
+    )
+
+    favorite_candidate = recommendations[
+        recommendations["id"] == 2
+    ].iloc[0]
+
+    other_candidate = recommendations[
+        recommendations["id"] == 3
+    ].iloc[0]
+
+    assert (
+        favorite_candidate["favorite_artist_score"]
+        == 1.0
+    )
+
+    assert (
+        other_candidate["favorite_artist_score"]
+        == 0.0
+    )
+
+    assert (
+        favorite_candidate["score"]
+        > other_candidate["score"]
+    )
+
+    assert (
+        "favorite artists"
+        in favorite_candidate["explanation"].lower()
+    )
+
+
+def test_onboarding_influence_decreases_with_more_ratings():
+    songs_list = []
+
+    # Ten rated songs with identical musical characteristics.
+    for song_id in range(1, 11):
+        songs_list.append(
+            make_song(
+                song_id,
+                f"Rated Song {song_id}",
+                f"Rated Artist {song_id}",
+                "Rock",
+                120,
+                0.8,
+                0.7,
+                0.7,
+                0.2,
+                0.1,
+                0.1,
+                0.2,
+                0.5,
+            )
+        )
+
+    # Two otherwise identical candidates.
+    songs_list.extend(
+        [
+            make_song(
+                11,
+                "Favorite Artist Candidate",
+                "Favorite Artist",
+                "Rock",
+                120,
+                0.8,
+                0.7,
+                0.7,
+                0.2,
+                0.1,
+                0.1,
+                0.2,
+                0.5,
+            ),
+            make_song(
+                12,
+                "Other Artist Candidate",
+                "Other Artist",
+                "Rock",
+                120,
+                0.8,
+                0.7,
+                0.7,
+                0.2,
+                0.1,
+                0.1,
+                0.2,
+                0.5,
+            ),
+        ]
+    )
+
+    songs = pd.DataFrame(
+        songs_list
+    )
+
+    favorite_artists = pd.DataFrame(
+        [
+            {
+                "artist": "Favorite Artist",
+            }
+        ]
+    )
+
+    # --------------------------------------------------
+    # SPARSE USER:
+    # only one meaningful rating
+    # --------------------------------------------------
+
+    sparse_ratings = pd.DataFrame(
+        [
+            {
+                "songId": 1,
+                "value": 5,
+                "updatedAt": pd.Timestamp.now(tz="UTC"),
+            }
+        ]
+    )
+
+    sparse_recommendations = build_recommendations_from_data(
+        songs=songs,
+        ratings=sparse_ratings,
+        favorite_genres=pd.DataFrame(
+            columns=["genre"]
+        ),
+        favorite_artists=favorite_artists,
+        limit=20,
+    )
+
+    sparse_favorite_score = sparse_recommendations.loc[
+        sparse_recommendations["id"] == 11,
+        "score",
+    ].iloc[0]
+
+    sparse_other_score = sparse_recommendations.loc[
+        sparse_recommendations["id"] == 12,
+        "score",
+    ].iloc[0]
+
+    sparse_boost = (
+        sparse_favorite_score
+        - sparse_other_score
+    )
+
+    # --------------------------------------------------
+    # EXPERIENCED USER:
+    # ten meaningful ratings -> full confidence
+    # --------------------------------------------------
+
+    dense_ratings = pd.DataFrame(
+        [
+            {
+                "songId": song_id,
+                "value": 5,
+                "updatedAt": pd.Timestamp.now(tz="UTC"),
+            }
+            for song_id in range(1, 11)
+        ]
+    )
+
+    dense_recommendations = build_recommendations_from_data(
+        songs=songs,
+        ratings=dense_ratings,
+        favorite_genres=pd.DataFrame(
+            columns=["genre"]
+        ),
+        favorite_artists=favorite_artists,
+        limit=20,
+    )
+
+    dense_favorite_score = dense_recommendations.loc[
+        dense_recommendations["id"] == 11,
+        "score",
+    ].iloc[0]
+
+    dense_other_score = dense_recommendations.loc[
+        dense_recommendations["id"] == 12,
+        "score",
+    ].iloc[0]
+
+    dense_boost = (
+        dense_favorite_score
+        - dense_other_score
+    )
+
+    # With sparse feedback, onboarding should create
+    # a noticeable favorite-artist advantage.
+    assert sparse_boost > 0
+
+    # Once the user has ten meaningful ratings,
+    # confidence reaches 1.0 and onboarding no longer
+    # changes the final score.
+    assert abs(dense_boost) < 1e-9
+
+    # Therefore onboarding has more influence for
+    # a new/sparse user than an experienced user.
+    assert sparse_boost > dense_boost
