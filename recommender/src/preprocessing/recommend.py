@@ -42,6 +42,8 @@ RETURN_COLUMNS = [
     "popularity",
     "score",
     "explanation",
+    "collaborative_score",
+    "collaborative_support",
 ]
 
 
@@ -105,6 +107,25 @@ def load_ratings(engine, user_id):
         },
     )
 
+def load_all_ratings(engine):
+    query = text(
+        """
+        SELECT
+            "userId",
+            "songId",
+            value,
+            "updatedAt"
+        FROM "Rating"
+        ORDER BY
+            "userId",
+            "songId"
+        """
+    )
+
+    return pd.read_sql_query(
+        query,
+        engine,
+    )
 
 def load_favorite_genres(engine, user_id):
     query = text(
@@ -237,6 +258,10 @@ def build_cold_start_recommendations(
     recommendations["negative_similarity"] = 0.0
     recommendations["genre_score"] = 0.5
 
+    # Cold-start users do not have collaborative evidence yet.
+    recommendations["collaborative_score"] = 0.5
+    recommendations["collaborative_support"] = 0
+
     onboarding_score = (
         recommendations["favorite_genre_score"] * 0.60
         + recommendations["favorite_artist_score"] * 0.40
@@ -310,14 +335,236 @@ def build_cold_start_recommendations(
 # RECOMMENDATION ENGINE
 # --------------------------------------------------
 
+def calculate_collaborative_scores(
+    user_id,
+    ratings,
+    all_ratings,
+    candidate_song_ids,
+):
+    # Default: no collaborative information.
+    empty_result = pd.DataFrame(
+        {
+            "id": list(candidate_song_ids),
+            "collaborative_score": 0.5,
+            "collaborative_support": 0,
+        }
+    )
+
+    if (
+        user_id is None
+        or all_ratings is None
+        or all_ratings.empty
+        or ratings.empty
+    ):
+        return empty_result
+
+    required_columns = {
+        "userId",
+        "songId",
+        "value",
+    }
+
+    if not required_columns.issubset(
+        all_ratings.columns
+    ):
+        return empty_result
+
+    # Neutral 3/5 ratings do not describe preference.
+    target_ratings = ratings[
+        ratings["value"] != 3
+    ].copy()
+
+    if target_ratings.empty:
+        return empty_result
+
+    target_preferences = {
+        row["songId"]: (
+            row["value"] - 3
+        ) / 2
+        for _, row in target_ratings.iterrows()
+    }
+
+    candidate_song_ids = set(
+        candidate_song_ids
+    )
+
+    numerators = {
+        song_id: 0.0
+        for song_id in candidate_song_ids
+    }
+
+    denominators = {
+        song_id: 0.0
+        for song_id in candidate_song_ids
+    }
+
+    support_counts = {
+        song_id: 0
+        for song_id in candidate_song_ids
+    }
+
+    other_users = all_ratings[
+        all_ratings["userId"] != user_id
+    ]
+
+    for _, user_group in other_users.groupby(
+        "userId"
+    ):
+        overlapping = user_group[
+            user_group["songId"].isin(
+                target_preferences.keys()
+            )
+        ].copy()
+
+        # One matching rating is too weak to conclude
+        # that two users have similar taste.
+        if len(overlapping) < 2:
+            continue
+
+        target_vector = []
+        other_vector = []
+
+        for _, row in overlapping.iterrows():
+            song_id = row["songId"]
+
+            target_vector.append(
+                target_preferences[song_id]
+            )
+
+            other_vector.append(
+                (row["value"] - 3) / 2
+            )
+
+        target_vector = np.array(
+            target_vector,
+            dtype=float,
+        )
+
+        other_vector = np.array(
+            other_vector,
+            dtype=float,
+        )
+
+        target_norm = np.linalg.norm(
+            target_vector
+        )
+
+        other_norm = np.linalg.norm(
+            other_vector
+        )
+
+        if (
+            target_norm == 0
+            or other_norm == 0
+        ):
+            continue
+
+        similarity = float(
+            np.dot(
+                target_vector,
+                other_vector,
+            )
+            / (
+                target_norm
+                * other_norm
+            )
+        )
+
+        # Users with more ratings in common should be
+        # trusted more than users with only two overlaps.
+        overlap_count = len(
+            overlapping
+        )
+
+        shrinkage = (
+            overlap_count
+            / (overlap_count + 2)
+        )
+
+        similarity *= shrinkage
+
+        # We only use positively similar users.
+        if similarity <= 0:
+            continue
+
+        candidate_ratings = user_group[
+            user_group["songId"].isin(
+                candidate_song_ids
+            )
+        ]
+
+        for _, row in candidate_ratings.iterrows():
+            song_id = row["songId"]
+
+            preference = (
+                row["value"] - 3
+            ) / 2
+
+            numerators[song_id] += (
+                similarity
+                * preference
+            )
+
+            denominators[song_id] += abs(
+                similarity
+            )
+
+            support_counts[song_id] += 1
+
+    rows = []
+
+    for song_id in candidate_song_ids:
+        denominator = denominators[
+            song_id
+        ]
+
+        if denominator > 0:
+            predicted_preference = (
+                numerators[song_id]
+                / denominator
+            )
+
+            # Convert -1...1 into 0...1.
+            collaborative_score = (
+                predicted_preference + 1
+            ) / 2
+
+            collaborative_score = float(
+                np.clip(
+                    collaborative_score,
+                    0,
+                    1,
+                )
+            )
+
+        else:
+            # Neutral if we have no collaborative evidence.
+            collaborative_score = 0.5
+
+        rows.append(
+            {
+                "id": song_id,
+                "collaborative_score": collaborative_score,
+                "collaborative_support": support_counts[
+                    song_id
+                ],
+            }
+        )
+
+    return pd.DataFrame(
+        rows
+    )
 
 def build_recommendations_from_data(
     songs,
     ratings,
     favorite_genres=None,
     favorite_artists=None,
+    all_ratings=None,
+    user_id=None,
     limit=10,
 ):
+    
     # --------------------------------------------------
     # PREPARE SONG DATA
     # --------------------------------------------------
@@ -630,6 +877,30 @@ def build_recommendations_from_data(
     if recommendations.empty:
         return pd.DataFrame()
 
+    collaborative_scores = calculate_collaborative_scores(
+        user_id=user_id,
+        ratings=ratings,
+        all_ratings=all_ratings,
+        candidate_song_ids=recommendations["id"].tolist(),
+    )
+
+    recommendations = recommendations.merge(
+        collaborative_scores,
+        on="id",
+        how="left",
+    )
+
+    recommendations["collaborative_score"] = (
+        recommendations["collaborative_score"]
+        .fillna(0.5)
+    )
+
+    recommendations["collaborative_support"] = (
+        recommendations["collaborative_support"]
+        .fillna(0)
+        .astype(int)
+    )
+
     # --------------------------------------------------
     # PERSONALIZATION CONFIDENCE
     # --------------------------------------------------
@@ -649,9 +920,9 @@ def build_recommendations_from_data(
     # --------------------------------------------------
 
     rating_based_score = (
-        recommendations["positive_similarity"] * 0.60
+        recommendations["positive_similarity"] * 0.55
         - recommendations["negative_similarity"] * 0.15
-        + recommendations["genre_score"] * 0.20
+        + recommendations["genre_score"] * 0.15
     )
 
     onboarding_score = (
@@ -659,9 +930,26 @@ def build_recommendations_from_data(
         + recommendations["favorite_artist_score"] * 0.40
     )
 
+    # Collaborative filtering only becomes meaningful
+    # when similar users have actually rated the song.
+    collaborative_confidence = (
+        recommendations["collaborative_support"]
+        .clip(
+            lower=0,
+            upper=3,
+        )
+        / 3
+    )
+
+    collaborative_component = (
+        recommendations["collaborative_score"]
+        * collaborative_confidence
+    )
+
     recommendations["score"] = (
         rating_based_score * confidence
-        + onboarding_score * onboarding_weight * 0.80
+        + onboarding_score * onboarding_weight * 0.75
+        + collaborative_component * 0.15
         + recommendations["popularity"].fillna(0) * 0.05
     )
 
@@ -747,6 +1035,14 @@ def build_recommendations_from_data(
             reasons.append(
                 "Some audio traits are also similar to songs "
                 "you rated lower."
+            )
+
+        if (
+            row["collaborative_support"] > 0
+            and row["collaborative_score"] >= 0.75
+        ):
+            reasons.append(
+                "Users with similar taste also rated this song highly."
             )
 
         if not reasons:
@@ -938,6 +1234,10 @@ def build_recommendations(
             user_id,
         )
 
+        all_ratings = load_all_ratings(
+            engine,
+        )
+
         favorite_genres = load_favorite_genres(
             engine,
             user_id,
@@ -956,6 +1256,8 @@ def build_recommendations(
         ratings=ratings,
         favorite_genres=favorite_genres,
         favorite_artists=favorite_artists,
+        all_ratings=all_ratings,
+        user_id=user_id,
         limit=limit,
     )
 

@@ -11,6 +11,7 @@ sys.path.append(
 
 from src.preprocessing.recommend import (
     build_recommendations_from_data,
+    calculate_collaborative_scores,
 )
 
 
@@ -976,3 +977,283 @@ def test_no_ratings_and_no_preferences_returns_empty():
     )
 
     assert recommendations.empty
+
+def test_collaborative_score_rewards_song_liked_by_similar_user():
+    ratings = pd.DataFrame(
+        [
+            {
+                "songId": 1,
+                "value": 5,
+                "updatedAt": pd.Timestamp.now(tz="UTC"),
+            },
+            {
+                "songId": 2,
+                "value": 4,
+                "updatedAt": pd.Timestamp.now(tz="UTC"),
+            },
+        ]
+    )
+
+    all_ratings = pd.DataFrame(
+        [
+            # Target user
+            {
+                "userId": 1,
+                "songId": 1,
+                "value": 5,
+                "updatedAt": pd.Timestamp.now(tz="UTC"),
+            },
+            {
+                "userId": 1,
+                "songId": 2,
+                "value": 4,
+                "updatedAt": pd.Timestamp.now(tz="UTC"),
+            },
+
+            # Similar user
+            {
+                "userId": 2,
+                "songId": 1,
+                "value": 5,
+                "updatedAt": pd.Timestamp.now(tz="UTC"),
+            },
+            {
+                "userId": 2,
+                "songId": 2,
+                "value": 4,
+                "updatedAt": pd.Timestamp.now(tz="UTC"),
+            },
+            {
+                "userId": 2,
+                "songId": 3,
+                "value": 5,
+                "updatedAt": pd.Timestamp.now(tz="UTC"),
+            },
+        ]
+    )
+
+    collaborative = calculate_collaborative_scores(
+        user_id=1,
+        ratings=ratings,
+        all_ratings=all_ratings,
+        candidate_song_ids=[3],
+    )
+
+    row = collaborative.iloc[0]
+
+    assert row["id"] == 3
+    assert row["collaborative_support"] == 1
+    assert row["collaborative_score"] > 0.5
+
+def test_collaborative_score_ignores_user_with_too_little_overlap():
+    ratings = pd.DataFrame(
+        [
+            {
+                "songId": 1,
+                "value": 5,
+                "updatedAt": pd.Timestamp.now(tz="UTC"),
+            },
+            {
+                "songId": 2,
+                "value": 4,
+                "updatedAt": pd.Timestamp.now(tz="UTC"),
+            },
+        ]
+    )
+
+    all_ratings = pd.DataFrame(
+        [
+            # Target user
+            {
+                "userId": 1,
+                "songId": 1,
+                "value": 5,
+                "updatedAt": pd.Timestamp.now(tz="UTC"),
+            },
+            {
+                "userId": 1,
+                "songId": 2,
+                "value": 4,
+                "updatedAt": pd.Timestamp.now(tz="UTC"),
+            },
+
+            # Other user only overlaps on one song
+            {
+                "userId": 2,
+                "songId": 1,
+                "value": 5,
+                "updatedAt": pd.Timestamp.now(tz="UTC"),
+            },
+            {
+                "userId": 2,
+                "songId": 3,
+                "value": 5,
+                "updatedAt": pd.Timestamp.now(tz="UTC"),
+            },
+        ]
+    )
+
+    collaborative = calculate_collaborative_scores(
+        user_id=1,
+        ratings=ratings,
+        all_ratings=all_ratings,
+        candidate_song_ids=[3],
+    )
+
+    row = collaborative.iloc[0]
+
+    assert row["id"] == 3
+    assert row["collaborative_support"] == 0
+    assert row["collaborative_score"] == 0.5
+
+def test_collaborative_filtering_boosts_final_recommendation_score():
+    songs = pd.DataFrame(
+        [
+            make_song(
+                1,
+                "Liked Song 1",
+                "Artist A",
+                "Rock",
+                120,
+                0.8,
+                0.7,
+                0.7,
+                0.2,
+                0.1,
+                0.1,
+                0.2,
+                0.5,
+            ),
+            make_song(
+                2,
+                "Liked Song 2",
+                "Artist B",
+                "Rock",
+                121,
+                0.79,
+                0.71,
+                0.69,
+                0.21,
+                0.11,
+                0.09,
+                0.19,
+                0.5,
+            ),
+            make_song(
+                3,
+                "Collaborative Candidate",
+                "Artist C",
+                "Rock",
+                110,
+                0.6,
+                0.6,
+                0.6,
+                0.3,
+                0.2,
+                0.1,
+                0.2,
+                0.5,
+            ),
+            make_song(
+                4,
+                "Non Collaborative Candidate",
+                "Artist D",
+                "Rock",
+                110,
+                0.6,
+                0.6,
+                0.6,
+                0.3,
+                0.2,
+                0.1,
+                0.2,
+                0.5,
+            ),
+        ]
+    )
+
+    ratings = pd.DataFrame(
+        [
+            {
+                "songId": 1,
+                "value": 5,
+                "updatedAt": pd.Timestamp.now(tz="UTC"),
+            },
+            {
+                "songId": 2,
+                "value": 5,
+                "updatedAt": pd.Timestamp.now(tz="UTC"),
+            },
+        ]
+    )
+
+    all_ratings = pd.DataFrame(
+        [
+            # Target user
+            {
+                "userId": 1,
+                "songId": 1,
+                "value": 5,
+                "updatedAt": pd.Timestamp.now(tz="UTC"),
+            },
+            {
+                "userId": 1,
+                "songId": 2,
+                "value": 5,
+                "updatedAt": pd.Timestamp.now(tz="UTC"),
+            },
+
+            # Similar user
+            {
+                "userId": 2,
+                "songId": 1,
+                "value": 5,
+                "updatedAt": pd.Timestamp.now(tz="UTC"),
+            },
+            {
+                "userId": 2,
+                "songId": 2,
+                "value": 5,
+                "updatedAt": pd.Timestamp.now(tz="UTC"),
+            },
+            {
+                "userId": 2,
+                "songId": 3,
+                "value": 5,
+                "updatedAt": pd.Timestamp.now(tz="UTC"),
+            },
+        ]
+    )
+
+    recommendations = build_recommendations_from_data(
+        songs=songs,
+        ratings=ratings,
+        favorite_genres=pd.DataFrame(
+            columns=["genre"]
+        ),
+        favorite_artists=pd.DataFrame(
+            columns=["artist"]
+        ),
+        all_ratings=all_ratings,
+        user_id=1,
+        limit=10,
+    )
+
+    collaborative_row = recommendations[
+        recommendations["id"] == 3
+    ].iloc[0]
+
+    non_collaborative_row = recommendations[
+        recommendations["id"] == 4
+    ].iloc[0]
+
+    assert collaborative_row["collaborative_support"] == 1
+    assert collaborative_row["collaborative_score"] > 0.5
+
+    assert non_collaborative_row["collaborative_support"] == 0
+    assert non_collaborative_row["collaborative_score"] == 0.5
+
+    assert (
+        collaborative_row["score"]
+        > non_collaborative_row["score"]
+    )
