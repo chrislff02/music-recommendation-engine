@@ -75,22 +75,6 @@ type ArtistsResponse = {
   artists: PreferenceItem[];
 };
 
-const GENRES = [
-  "",
-  "Rock",
-  "Electronic",
-  "Hip-Hop",
-  "Folk",
-  "Old-Time / Historic",
-  "Pop",
-  "Classical",
-  "Jazz",
-  "International",
-  "Instrumental",
-  "Blues",
-  "Experimental",
-];
-
 function formatDuration(duration: number | null) {
   if (duration === null || !Number.isFinite(duration)) {
     return "Unknown";
@@ -271,7 +255,6 @@ function App() {
       setSavedFavoriteArtists([]);
       setSelectedGenreIds([]);
       setSelectedArtists([]);
-      setAvailableGenres([]);
       return;
     }
 
@@ -280,28 +263,21 @@ function App() {
         setPreferencesLoaded(false);
         setPreferencesError("");
 
-        const [preferencesResponse, genresResponse] = await Promise.all([
-          fetch("http://localhost:5001/api/preferences", {
+        const preferencesResponse = await fetch(
+          "http://localhost:5001/api/preferences",
+          {
             headers: {
               Authorization: `Bearer ${token}`,
             },
-          }),
-
-          fetch("http://localhost:5001/api/genres"),
-        ]);
+          },
+        );
 
         if (!preferencesResponse.ok) {
           throw new Error("Failed to load your music preferences");
         }
 
-        if (!genresResponse.ok) {
-          throw new Error("Failed to load genres");
-        }
-
         const preferencesData: PreferencesResponse =
           await preferencesResponse.json();
-
-        const genresData: GenresResponse = await genresResponse.json();
 
         setSavedFavoriteGenres(preferencesData.genres);
         setSavedFavoriteArtists(preferencesData.artists);
@@ -311,8 +287,6 @@ function App() {
         );
 
         setSelectedArtists(preferencesData.artists);
-
-        setAvailableGenres(genresData.genres);
 
         const hasPreferences =
           preferencesData.genres.length > 0 ||
@@ -486,6 +460,26 @@ function App() {
       observer.disconnect();
     };
   }, [user]);
+
+  useEffect(() => {
+    async function fetchGenres() {
+      try {
+        const response = await fetch("http://localhost:5001/api/genres");
+
+        if (!response.ok) {
+          throw new Error("Failed to load genres");
+        }
+
+        const data: GenresResponse = await response.json();
+
+        setAvailableGenres(data.genres);
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    void fetchGenres();
+  }, []);
 
   function toggleRecommendationDetails(songId: number) {
     setExpandedRecommendations((current) => ({
@@ -772,8 +766,6 @@ function App() {
 
     setSelectedGenreIds([]);
     setSelectedArtists([]);
-
-    setAvailableGenres([]);
 
     setArtistSearchInput("");
     setArtistSearchResults([]);
@@ -1478,9 +1470,11 @@ function App() {
                 <label htmlFor="genre">Genre</label>
 
                 <select id="genre" value={genre} onChange={handleGenreChange}>
-                  {GENRES.map((genreOption) => (
-                    <option key={genreOption || "all"} value={genreOption}>
-                      {genreOption || "All Genres"}
+                  <option value="">All Genres</option>
+
+                  {availableGenres.map((genreOption) => (
+                    <option key={genreOption.id} value={genreOption.name}>
+                      {genreOption.name}
                     </option>
                   ))}
                 </select>
