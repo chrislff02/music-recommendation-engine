@@ -1,0 +1,1438 @@
+[
+  {
+    "id": "schema.public",
+    "label": "Create schema \"public\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres"
+    },
+    "precheck": [],
+    "execute": [
+      {
+        "description": "Create schema \"public\"",
+        "sql": "CREATE SCHEMA IF NOT EXISTS \"public\"",
+        "params": []
+      }
+    ],
+    "postcheck": []
+  },
+  {
+    "id": "table.Artist",
+    "label": "Create table \"Artist\"",
+    "summary": "Creates table \"Artist\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "table",
+        "name": "Artist"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure table \"Artist\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"Artist\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create table \"Artist\"",
+        "sql": "CREATE TABLE \"public\".\"Artist\" (\n  \"id\" SERIAL NOT NULL,\n  \"musicBrainzId\" text,\n  \"name\" text NOT NULL,\n  PRIMARY KEY (\"id\")\n)",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify table \"Artist\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"Artist\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "table.Genre",
+    "label": "Create table \"Genre\"",
+    "summary": "Creates table \"Genre\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "table",
+        "name": "Genre"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure table \"Genre\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"Genre\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create table \"Genre\"",
+        "sql": "CREATE TABLE \"public\".\"Genre\" (\n  \"id\" SERIAL NOT NULL,\n  \"name\" text NOT NULL,\n  PRIMARY KEY (\"id\")\n)",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify table \"Genre\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"Genre\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "table.Rating",
+    "label": "Create table \"Rating\"",
+    "summary": "Creates table \"Rating\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "table",
+        "name": "Rating"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure table \"Rating\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"Rating\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create table \"Rating\"",
+        "sql": "CREATE TABLE \"public\".\"Rating\" (\n  \"createdAt\" timestamptz DEFAULT (now()) NOT NULL,\n  \"id\" SERIAL NOT NULL,\n  \"songId\" int4 NOT NULL,\n  \"updatedAt\" timestamptz NOT NULL,\n  \"userId\" int4 NOT NULL,\n  \"value\" int4 NOT NULL,\n  PRIMARY KEY (\"id\")\n)",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify table \"Rating\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"Rating\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "table.Song",
+    "label": "Create table \"Song\"",
+    "summary": "Creates table \"Song\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "table",
+        "name": "Song"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure table \"Song\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"Song\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create table \"Song\"",
+        "sql": "CREATE TABLE \"public\".\"Song\" (\n  \"acousticness\" float8,\n  \"artistId\" int4 NOT NULL,\n  \"createdAt\" timestamptz DEFAULT (now()) NOT NULL,\n  \"danceability\" float8,\n  \"duration\" float8,\n  \"energy\" float8,\n  \"externalId\" text,\n  \"genreId\" int4,\n  \"id\" SERIAL NOT NULL,\n  \"instrumentalness\" float8,\n  \"listenCount\" int8,\n  \"listenerCount\" int4,\n  \"liveness\" float8,\n  \"musicBrainzId\" text,\n  \"popularity\" float8,\n  \"releaseYear\" int4,\n  \"speechiness\" float8,\n  \"tempo\" float8,\n  \"title\" text NOT NULL,\n  \"updatedAt\" timestamptz NOT NULL,\n  \"valence\" float8,\n  PRIMARY KEY (\"id\")\n)",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify table \"Song\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"Song\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "table.User",
+    "label": "Create table \"User\"",
+    "summary": "Creates table \"User\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "table",
+        "name": "User"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure table \"User\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"User\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create table \"User\"",
+        "sql": "CREATE TABLE \"public\".\"User\" (\n  \"createdAt\" timestamptz DEFAULT (now()) NOT NULL,\n  \"email\" text NOT NULL,\n  \"id\" SERIAL NOT NULL,\n  \"passwordHash\" text NOT NULL,\n  \"updatedAt\" timestamptz NOT NULL,\n  \"username\" text NOT NULL,\n  PRIMARY KEY (\"id\")\n)",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify table \"User\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"User\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "table.UserFavoriteArtist",
+    "label": "Create table \"UserFavoriteArtist\"",
+    "summary": "Creates table \"UserFavoriteArtist\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "table",
+        "name": "UserFavoriteArtist"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure table \"UserFavoriteArtist\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"UserFavoriteArtist\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create table \"UserFavoriteArtist\"",
+        "sql": "CREATE TABLE \"public\".\"UserFavoriteArtist\" (\n  \"artistId\" int4 NOT NULL,\n  \"createdAt\" timestamptz DEFAULT (now()) NOT NULL,\n  \"id\" SERIAL NOT NULL,\n  \"userId\" int4 NOT NULL,\n  PRIMARY KEY (\"id\")\n)",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify table \"UserFavoriteArtist\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"UserFavoriteArtist\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "table.UserFavoriteGenre",
+    "label": "Create table \"UserFavoriteGenre\"",
+    "summary": "Creates table \"UserFavoriteGenre\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "table",
+        "name": "UserFavoriteGenre"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure table \"UserFavoriteGenre\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"UserFavoriteGenre\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create table \"UserFavoriteGenre\"",
+        "sql": "CREATE TABLE \"public\".\"UserFavoriteGenre\" (\n  \"createdAt\" timestamptz DEFAULT (now()) NOT NULL,\n  \"genreId\" int4 NOT NULL,\n  \"id\" SERIAL NOT NULL,\n  \"userId\" int4 NOT NULL,\n  PRIMARY KEY (\"id\")\n)",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify table \"UserFavoriteGenre\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"UserFavoriteGenre\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "unique.Artist.Artist_name_key",
+    "label": "Add unique constraint on \"Artist\" (name)",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "unique",
+        "name": "Artist_name_key",
+        "table": "Artist"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure constraint \"Artist_name_key\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "Artist_name_key",
+          "public",
+          "\"public\".\"Artist\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add unique constraint \"Artist_name_key\"",
+        "sql": "ALTER TABLE \"public\".\"Artist\" ADD CONSTRAINT \"Artist_name_key\" UNIQUE (\"name\")"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify constraint \"Artist_name_key\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "Artist_name_key",
+          "public",
+          "\"public\".\"Artist\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "unique.Artist.Artist_musicBrainzId_key",
+    "label": "Add unique constraint on \"Artist\" (musicBrainzId)",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "unique",
+        "name": "Artist_musicBrainzId_key",
+        "table": "Artist"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure constraint \"Artist_musicBrainzId_key\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "Artist_musicBrainzId_key",
+          "public",
+          "\"public\".\"Artist\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add unique constraint \"Artist_musicBrainzId_key\"",
+        "sql": "ALTER TABLE \"public\".\"Artist\" ADD CONSTRAINT \"Artist_musicBrainzId_key\" UNIQUE (\"musicBrainzId\")"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify constraint \"Artist_musicBrainzId_key\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "Artist_musicBrainzId_key",
+          "public",
+          "\"public\".\"Artist\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "unique.Genre.Genre_name_key",
+    "label": "Add unique constraint on \"Genre\" (name)",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "unique",
+        "name": "Genre_name_key",
+        "table": "Genre"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure constraint \"Genre_name_key\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "Genre_name_key",
+          "public",
+          "\"public\".\"Genre\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add unique constraint \"Genre_name_key\"",
+        "sql": "ALTER TABLE \"public\".\"Genre\" ADD CONSTRAINT \"Genre_name_key\" UNIQUE (\"name\")"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify constraint \"Genre_name_key\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "Genre_name_key",
+          "public",
+          "\"public\".\"Genre\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "unique.Rating.Rating_userId_songId_key",
+    "label": "Add unique constraint on \"Rating\" (userId, songId)",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "unique",
+        "name": "Rating_userId_songId_key",
+        "table": "Rating"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure constraint \"Rating_userId_songId_key\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "Rating_userId_songId_key",
+          "public",
+          "\"public\".\"Rating\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add unique constraint \"Rating_userId_songId_key\"",
+        "sql": "ALTER TABLE \"public\".\"Rating\" ADD CONSTRAINT \"Rating_userId_songId_key\" UNIQUE (\"userId\", \"songId\")"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify constraint \"Rating_userId_songId_key\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "Rating_userId_songId_key",
+          "public",
+          "\"public\".\"Rating\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "unique.Song.Song_externalId_key",
+    "label": "Add unique constraint on \"Song\" (externalId)",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "unique",
+        "name": "Song_externalId_key",
+        "table": "Song"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure constraint \"Song_externalId_key\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "Song_externalId_key",
+          "public",
+          "\"public\".\"Song\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add unique constraint \"Song_externalId_key\"",
+        "sql": "ALTER TABLE \"public\".\"Song\" ADD CONSTRAINT \"Song_externalId_key\" UNIQUE (\"externalId\")"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify constraint \"Song_externalId_key\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "Song_externalId_key",
+          "public",
+          "\"public\".\"Song\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "unique.Song.Song_musicBrainzId_key",
+    "label": "Add unique constraint on \"Song\" (musicBrainzId)",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "unique",
+        "name": "Song_musicBrainzId_key",
+        "table": "Song"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure constraint \"Song_musicBrainzId_key\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "Song_musicBrainzId_key",
+          "public",
+          "\"public\".\"Song\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add unique constraint \"Song_musicBrainzId_key\"",
+        "sql": "ALTER TABLE \"public\".\"Song\" ADD CONSTRAINT \"Song_musicBrainzId_key\" UNIQUE (\"musicBrainzId\")"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify constraint \"Song_musicBrainzId_key\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "Song_musicBrainzId_key",
+          "public",
+          "\"public\".\"Song\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "unique.User.User_email_key",
+    "label": "Add unique constraint on \"User\" (email)",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "unique",
+        "name": "User_email_key",
+        "table": "User"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure constraint \"User_email_key\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "User_email_key",
+          "public",
+          "\"public\".\"User\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add unique constraint \"User_email_key\"",
+        "sql": "ALTER TABLE \"public\".\"User\" ADD CONSTRAINT \"User_email_key\" UNIQUE (\"email\")"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify constraint \"User_email_key\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "User_email_key",
+          "public",
+          "\"public\".\"User\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "unique.User.User_username_key",
+    "label": "Add unique constraint on \"User\" (username)",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "unique",
+        "name": "User_username_key",
+        "table": "User"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure constraint \"User_username_key\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "User_username_key",
+          "public",
+          "\"public\".\"User\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add unique constraint \"User_username_key\"",
+        "sql": "ALTER TABLE \"public\".\"User\" ADD CONSTRAINT \"User_username_key\" UNIQUE (\"username\")"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify constraint \"User_username_key\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "User_username_key",
+          "public",
+          "\"public\".\"User\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "unique.UserFavoriteArtist.UserFavoriteArtist_userId_artistId_key",
+    "label": "Add unique constraint on \"UserFavoriteArtist\" (userId, artistId)",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "unique",
+        "name": "UserFavoriteArtist_userId_artistId_key",
+        "table": "UserFavoriteArtist"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure constraint \"UserFavoriteArtist_userId_artistId_key\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "UserFavoriteArtist_userId_artistId_key",
+          "public",
+          "\"public\".\"UserFavoriteArtist\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add unique constraint \"UserFavoriteArtist_userId_artistId_key\"",
+        "sql": "ALTER TABLE \"public\".\"UserFavoriteArtist\" ADD CONSTRAINT \"UserFavoriteArtist_userId_artistId_key\" UNIQUE (\"userId\", \"artistId\")"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify constraint \"UserFavoriteArtist_userId_artistId_key\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "UserFavoriteArtist_userId_artistId_key",
+          "public",
+          "\"public\".\"UserFavoriteArtist\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "unique.UserFavoriteGenre.UserFavoriteGenre_userId_genreId_key",
+    "label": "Add unique constraint on \"UserFavoriteGenre\" (userId, genreId)",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "unique",
+        "name": "UserFavoriteGenre_userId_genreId_key",
+        "table": "UserFavoriteGenre"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure constraint \"UserFavoriteGenre_userId_genreId_key\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "UserFavoriteGenre_userId_genreId_key",
+          "public",
+          "\"public\".\"UserFavoriteGenre\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add unique constraint \"UserFavoriteGenre_userId_genreId_key\"",
+        "sql": "ALTER TABLE \"public\".\"UserFavoriteGenre\" ADD CONSTRAINT \"UserFavoriteGenre_userId_genreId_key\" UNIQUE (\"userId\", \"genreId\")"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify constraint \"UserFavoriteGenre_userId_genreId_key\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "UserFavoriteGenre_userId_genreId_key",
+          "public",
+          "\"public\".\"UserFavoriteGenre\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "index.Rating.Rating_songId_idx_f4553cd5",
+    "label": "Create index \"Rating_songId_idx_f4553cd5\" on \"Rating\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "index",
+        "name": "Rating_songId_idx_f4553cd5",
+        "table": "Rating"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure index \"Rating_songId_idx_f4553cd5\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"Rating_songId_idx_f4553cd5\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index \"Rating_songId_idx_f4553cd5\"",
+        "sql": "CREATE INDEX \"Rating_songId_idx_f4553cd5\" ON \"public\".\"Rating\" (\"songId\")",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify index \"Rating_songId_idx_f4553cd5\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"Rating_songId_idx_f4553cd5\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "index.Rating.Rating_userId_idx_a489d58a",
+    "label": "Create index \"Rating_userId_idx_a489d58a\" on \"Rating\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "index",
+        "name": "Rating_userId_idx_a489d58a",
+        "table": "Rating"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure index \"Rating_userId_idx_a489d58a\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"Rating_userId_idx_a489d58a\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index \"Rating_userId_idx_a489d58a\"",
+        "sql": "CREATE INDEX \"Rating_userId_idx_a489d58a\" ON \"public\".\"Rating\" (\"userId\")",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify index \"Rating_userId_idx_a489d58a\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"Rating_userId_idx_a489d58a\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "index.Song.Song_artistId_idx_5a004db6",
+    "label": "Create index \"Song_artistId_idx_5a004db6\" on \"Song\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "index",
+        "name": "Song_artistId_idx_5a004db6",
+        "table": "Song"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure index \"Song_artistId_idx_5a004db6\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"Song_artistId_idx_5a004db6\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index \"Song_artistId_idx_5a004db6\"",
+        "sql": "CREATE INDEX \"Song_artistId_idx_5a004db6\" ON \"public\".\"Song\" (\"artistId\")",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify index \"Song_artistId_idx_5a004db6\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"Song_artistId_idx_5a004db6\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "index.Song.Song_genreId_idx_8fce6a7b",
+    "label": "Create index \"Song_genreId_idx_8fce6a7b\" on \"Song\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "index",
+        "name": "Song_genreId_idx_8fce6a7b",
+        "table": "Song"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure index \"Song_genreId_idx_8fce6a7b\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"Song_genreId_idx_8fce6a7b\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index \"Song_genreId_idx_8fce6a7b\"",
+        "sql": "CREATE INDEX \"Song_genreId_idx_8fce6a7b\" ON \"public\".\"Song\" (\"genreId\")",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify index \"Song_genreId_idx_8fce6a7b\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"Song_genreId_idx_8fce6a7b\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "index.Song.Song_releaseYear_idx_a285856b",
+    "label": "Create index \"Song_releaseYear_idx_a285856b\" on \"Song\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "index",
+        "name": "Song_releaseYear_idx_a285856b",
+        "table": "Song"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure index \"Song_releaseYear_idx_a285856b\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"Song_releaseYear_idx_a285856b\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index \"Song_releaseYear_idx_a285856b\"",
+        "sql": "CREATE INDEX \"Song_releaseYear_idx_a285856b\" ON \"public\".\"Song\" (\"releaseYear\")",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify index \"Song_releaseYear_idx_a285856b\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"Song_releaseYear_idx_a285856b\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "index.Song.Song_title_idx_1c94c7b6",
+    "label": "Create index \"Song_title_idx_1c94c7b6\" on \"Song\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "index",
+        "name": "Song_title_idx_1c94c7b6",
+        "table": "Song"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure index \"Song_title_idx_1c94c7b6\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"Song_title_idx_1c94c7b6\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index \"Song_title_idx_1c94c7b6\"",
+        "sql": "CREATE INDEX \"Song_title_idx_1c94c7b6\" ON \"public\".\"Song\" (\"title\")",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify index \"Song_title_idx_1c94c7b6\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"Song_title_idx_1c94c7b6\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "index.UserFavoriteArtist.UserFavoriteArtist_artistId_idx_5a004db6",
+    "label": "Create index \"UserFavoriteArtist_artistId_idx_5a004db6\" on \"UserFavoriteArtist\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "index",
+        "name": "UserFavoriteArtist_artistId_idx_5a004db6",
+        "table": "UserFavoriteArtist"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure index \"UserFavoriteArtist_artistId_idx_5a004db6\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"UserFavoriteArtist_artistId_idx_5a004db6\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index \"UserFavoriteArtist_artistId_idx_5a004db6\"",
+        "sql": "CREATE INDEX \"UserFavoriteArtist_artistId_idx_5a004db6\" ON \"public\".\"UserFavoriteArtist\" (\"artistId\")",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify index \"UserFavoriteArtist_artistId_idx_5a004db6\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"UserFavoriteArtist_artistId_idx_5a004db6\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "index.UserFavoriteArtist.UserFavoriteArtist_userId_idx_a489d58a",
+    "label": "Create index \"UserFavoriteArtist_userId_idx_a489d58a\" on \"UserFavoriteArtist\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "index",
+        "name": "UserFavoriteArtist_userId_idx_a489d58a",
+        "table": "UserFavoriteArtist"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure index \"UserFavoriteArtist_userId_idx_a489d58a\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"UserFavoriteArtist_userId_idx_a489d58a\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index \"UserFavoriteArtist_userId_idx_a489d58a\"",
+        "sql": "CREATE INDEX \"UserFavoriteArtist_userId_idx_a489d58a\" ON \"public\".\"UserFavoriteArtist\" (\"userId\")",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify index \"UserFavoriteArtist_userId_idx_a489d58a\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"UserFavoriteArtist_userId_idx_a489d58a\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "index.UserFavoriteGenre.UserFavoriteGenre_genreId_idx_8fce6a7b",
+    "label": "Create index \"UserFavoriteGenre_genreId_idx_8fce6a7b\" on \"UserFavoriteGenre\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "index",
+        "name": "UserFavoriteGenre_genreId_idx_8fce6a7b",
+        "table": "UserFavoriteGenre"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure index \"UserFavoriteGenre_genreId_idx_8fce6a7b\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"UserFavoriteGenre_genreId_idx_8fce6a7b\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index \"UserFavoriteGenre_genreId_idx_8fce6a7b\"",
+        "sql": "CREATE INDEX \"UserFavoriteGenre_genreId_idx_8fce6a7b\" ON \"public\".\"UserFavoriteGenre\" (\"genreId\")",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify index \"UserFavoriteGenre_genreId_idx_8fce6a7b\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"UserFavoriteGenre_genreId_idx_8fce6a7b\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "index.UserFavoriteGenre.UserFavoriteGenre_userId_idx_a489d58a",
+    "label": "Create index \"UserFavoriteGenre_userId_idx_a489d58a\" on \"UserFavoriteGenre\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "index",
+        "name": "UserFavoriteGenre_userId_idx_a489d58a",
+        "table": "UserFavoriteGenre"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure index \"UserFavoriteGenre_userId_idx_a489d58a\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"UserFavoriteGenre_userId_idx_a489d58a\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index \"UserFavoriteGenre_userId_idx_a489d58a\"",
+        "sql": "CREATE INDEX \"UserFavoriteGenre_userId_idx_a489d58a\" ON \"public\".\"UserFavoriteGenre\" (\"userId\")",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify index \"UserFavoriteGenre_userId_idx_a489d58a\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"UserFavoriteGenre_userId_idx_a489d58a\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "foreignKey.Rating.Rating_userId_fkey",
+    "label": "Add foreign key \"Rating_userId_fkey\" on \"Rating\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "foreignKey",
+        "name": "Rating_userId_fkey",
+        "table": "Rating"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure FK \"Rating_userId_fkey\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "Rating_userId_fkey",
+          "public",
+          "\"public\".\"Rating\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add FK \"Rating_userId_fkey\"",
+        "sql": "ALTER TABLE \"public\".\"Rating\"\nADD CONSTRAINT \"Rating_userId_fkey\"\nFOREIGN KEY (\"userId\")\nREFERENCES \"public\".\"User\" (\"id\")\nON DELETE CASCADE"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify FK \"Rating_userId_fkey\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "Rating_userId_fkey",
+          "public",
+          "\"public\".\"Rating\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "foreignKey.Rating.Rating_songId_fkey",
+    "label": "Add foreign key \"Rating_songId_fkey\" on \"Rating\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "foreignKey",
+        "name": "Rating_songId_fkey",
+        "table": "Rating"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure FK \"Rating_songId_fkey\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "Rating_songId_fkey",
+          "public",
+          "\"public\".\"Rating\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add FK \"Rating_songId_fkey\"",
+        "sql": "ALTER TABLE \"public\".\"Rating\"\nADD CONSTRAINT \"Rating_songId_fkey\"\nFOREIGN KEY (\"songId\")\nREFERENCES \"public\".\"Song\" (\"id\")\nON DELETE CASCADE"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify FK \"Rating_songId_fkey\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "Rating_songId_fkey",
+          "public",
+          "\"public\".\"Rating\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "foreignKey.Song.Song_artistId_fkey",
+    "label": "Add foreign key \"Song_artistId_fkey\" on \"Song\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "foreignKey",
+        "name": "Song_artistId_fkey",
+        "table": "Song"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure FK \"Song_artistId_fkey\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "Song_artistId_fkey",
+          "public",
+          "\"public\".\"Song\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add FK \"Song_artistId_fkey\"",
+        "sql": "ALTER TABLE \"public\".\"Song\"\nADD CONSTRAINT \"Song_artistId_fkey\"\nFOREIGN KEY (\"artistId\")\nREFERENCES \"public\".\"Artist\" (\"id\")"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify FK \"Song_artistId_fkey\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "Song_artistId_fkey",
+          "public",
+          "\"public\".\"Song\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "foreignKey.Song.Song_genreId_fkey",
+    "label": "Add foreign key \"Song_genreId_fkey\" on \"Song\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "foreignKey",
+        "name": "Song_genreId_fkey",
+        "table": "Song"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure FK \"Song_genreId_fkey\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "Song_genreId_fkey",
+          "public",
+          "\"public\".\"Song\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add FK \"Song_genreId_fkey\"",
+        "sql": "ALTER TABLE \"public\".\"Song\"\nADD CONSTRAINT \"Song_genreId_fkey\"\nFOREIGN KEY (\"genreId\")\nREFERENCES \"public\".\"Genre\" (\"id\")"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify FK \"Song_genreId_fkey\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "Song_genreId_fkey",
+          "public",
+          "\"public\".\"Song\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "foreignKey.UserFavoriteArtist.UserFavoriteArtist_userId_fkey",
+    "label": "Add foreign key \"UserFavoriteArtist_userId_fkey\" on \"UserFavoriteArtist\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "foreignKey",
+        "name": "UserFavoriteArtist_userId_fkey",
+        "table": "UserFavoriteArtist"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure FK \"UserFavoriteArtist_userId_fkey\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "UserFavoriteArtist_userId_fkey",
+          "public",
+          "\"public\".\"UserFavoriteArtist\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add FK \"UserFavoriteArtist_userId_fkey\"",
+        "sql": "ALTER TABLE \"public\".\"UserFavoriteArtist\"\nADD CONSTRAINT \"UserFavoriteArtist_userId_fkey\"\nFOREIGN KEY (\"userId\")\nREFERENCES \"public\".\"User\" (\"id\")\nON DELETE CASCADE"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify FK \"UserFavoriteArtist_userId_fkey\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "UserFavoriteArtist_userId_fkey",
+          "public",
+          "\"public\".\"UserFavoriteArtist\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "foreignKey.UserFavoriteArtist.UserFavoriteArtist_artistId_fkey",
+    "label": "Add foreign key \"UserFavoriteArtist_artistId_fkey\" on \"UserFavoriteArtist\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "foreignKey",
+        "name": "UserFavoriteArtist_artistId_fkey",
+        "table": "UserFavoriteArtist"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure FK \"UserFavoriteArtist_artistId_fkey\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "UserFavoriteArtist_artistId_fkey",
+          "public",
+          "\"public\".\"UserFavoriteArtist\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add FK \"UserFavoriteArtist_artistId_fkey\"",
+        "sql": "ALTER TABLE \"public\".\"UserFavoriteArtist\"\nADD CONSTRAINT \"UserFavoriteArtist_artistId_fkey\"\nFOREIGN KEY (\"artistId\")\nREFERENCES \"public\".\"Artist\" (\"id\")\nON DELETE CASCADE"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify FK \"UserFavoriteArtist_artistId_fkey\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "UserFavoriteArtist_artistId_fkey",
+          "public",
+          "\"public\".\"UserFavoriteArtist\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "foreignKey.UserFavoriteGenre.UserFavoriteGenre_userId_fkey",
+    "label": "Add foreign key \"UserFavoriteGenre_userId_fkey\" on \"UserFavoriteGenre\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "foreignKey",
+        "name": "UserFavoriteGenre_userId_fkey",
+        "table": "UserFavoriteGenre"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure FK \"UserFavoriteGenre_userId_fkey\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "UserFavoriteGenre_userId_fkey",
+          "public",
+          "\"public\".\"UserFavoriteGenre\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add FK \"UserFavoriteGenre_userId_fkey\"",
+        "sql": "ALTER TABLE \"public\".\"UserFavoriteGenre\"\nADD CONSTRAINT \"UserFavoriteGenre_userId_fkey\"\nFOREIGN KEY (\"userId\")\nREFERENCES \"public\".\"User\" (\"id\")\nON DELETE CASCADE"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify FK \"UserFavoriteGenre_userId_fkey\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "UserFavoriteGenre_userId_fkey",
+          "public",
+          "\"public\".\"UserFavoriteGenre\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "foreignKey.UserFavoriteGenre.UserFavoriteGenre_genreId_fkey",
+    "label": "Add foreign key \"UserFavoriteGenre_genreId_fkey\" on \"UserFavoriteGenre\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "foreignKey",
+        "name": "UserFavoriteGenre_genreId_fkey",
+        "table": "UserFavoriteGenre"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure FK \"UserFavoriteGenre_genreId_fkey\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "UserFavoriteGenre_genreId_fkey",
+          "public",
+          "\"public\".\"UserFavoriteGenre\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add FK \"UserFavoriteGenre_genreId_fkey\"",
+        "sql": "ALTER TABLE \"public\".\"UserFavoriteGenre\"\nADD CONSTRAINT \"UserFavoriteGenre_genreId_fkey\"\nFOREIGN KEY (\"genreId\")\nREFERENCES \"public\".\"Genre\" (\"id\")\nON DELETE CASCADE"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify FK \"UserFavoriteGenre_genreId_fkey\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "UserFavoriteGenre_genreId_fkey",
+          "public",
+          "\"public\".\"UserFavoriteGenre\""
+        ]
+      }
+    ]
+  }
+]

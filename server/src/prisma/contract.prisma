@@ -14,11 +14,12 @@ model User {
 }
 
 model Artist {
-  id   Int    @id @default(autoincrement())
-  name String @unique
+  id            Int     @id @default(autoincrement())
+  name          String  @unique
+  musicBrainzId String? @unique
 
-  songs         Song[]
-  favoritedBy   UserFavoriteArtist[]
+  songs       Song[]
+  favoritedBy UserFavoriteArtist[]
 }
 
 model Genre {
@@ -30,23 +31,21 @@ model Genre {
 }
 
 model Song {
-  id          Int    @id @default(autoincrement())
-  title       String
-  externalId  String? @unique
+  id         Int     @id @default(autoincrement())
+  title      String
+  externalId String? @unique
+
+  musicBrainzId String? @unique
+  releaseYear   Int?
+
+  listenCount   BigInt?
+  listenerCount Int?
 
   artistId Int
   genreId  Int?
 
-  tempo            Float?
-  energy           Float?
-  danceability     Float?
-  valence          Float?
-  acousticness     Float?
-  instrumentalness Float?
-  speechiness      Float?
-  liveness         Float?
-  popularity       Float?
-  duration         Float?
+  popularity Float?
+  duration   Float?
 
   createdAt DateTime @default(now())
   updatedAt temporal.updatedAt()
@@ -59,6 +58,7 @@ model Song {
   @@index([artistId])
   @@index([genreId])
   @@index([title])
+  @@index([releaseYear])
 }
 
 model Rating {

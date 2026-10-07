@@ -5,17 +5,13 @@ import "./App.css";
 type Song = {
   id: number;
   title: string;
-  externalId: string;
-  tempo: number;
-  energy: number;
-  danceability: number;
-  valence: number;
-  acousticness: number;
-  instrumentalness: number;
-  speechiness: number;
-  liveness: number;
-  popularity: number;
-  duration: number;
+  externalId: string | null;
+  musicBrainzId?: string | null;
+  releaseYear?: number | null;
+  listenCount?: number | null;
+  listenerCount?: number | null;
+  popularity: number | null;
+  duration: number | null;
   artist: string;
   genre: string | null;
 };
@@ -45,10 +41,14 @@ type Recommendation = {
   title: string;
   artist: string;
   genre: string | null;
-  positive_similarity: number;
-  negative_similarity: number;
-  genre_score: number;
+  releaseYear: number | null;
   popularity: number;
+  genre_score: number;
+  artist_score: number;
+  favorite_genre_score: number;
+  favorite_artist_score: number;
+  collaborative_score: number;
+  collaborative_support: number;
   score: number;
   explanation: string;
 };
@@ -90,6 +90,20 @@ const GENRES = [
   "Blues",
   "Experimental",
 ];
+
+function formatDuration(duration: number | null) {
+  if (duration === null || !Number.isFinite(duration)) {
+    return "Unknown";
+  }
+
+  const totalSeconds = Math.round(duration);
+
+  const minutes = Math.floor(totalSeconds / 60);
+
+  const seconds = totalSeconds % 60;
+
+  return `${minutes}:${String(seconds).padStart(2, "0")}`;
+}
 
 function App() {
   const [songs, setSongs] = useState<Song[]>([]);
@@ -1256,26 +1270,6 @@ function App() {
                       {expandedRecommendations[song.id] && (
                         <div className="recommendation-details">
                           <div className="recommendation-detail-row">
-                            <span>Audio similarity</span>
-
-                            <strong>
-                              {(song.positive_similarity * 100).toFixed(0)}%
-                            </strong>
-                          </div>
-
-                          <div className="recommendation-detail-bar">
-                            <div
-                              className="recommendation-detail-fill"
-                              style={{
-                                width: `${Math.min(
-                                  Math.max(song.positive_similarity * 100, 0),
-                                  100,
-                                )}%`,
-                              }}
-                            />
-                          </div>
-
-                          <div className="recommendation-detail-row">
                             <span>Genre preference</span>
 
                             <strong>
@@ -1289,6 +1283,26 @@ function App() {
                               style={{
                                 width: `${Math.min(
                                   Math.max(song.genre_score * 100, 0),
+                                  100,
+                                )}%`,
+                              }}
+                            />
+                          </div>
+
+                          <div className="recommendation-detail-row">
+                            <span>Artist preference</span>
+
+                            <strong>
+                              {(song.artist_score * 100).toFixed(0)}%
+                            </strong>
+                          </div>
+
+                          <div className="recommendation-detail-bar">
+                            <div
+                              className="recommendation-detail-fill"
+                              style={{
+                                width: `${Math.min(
+                                  Math.max(song.artist_score * 100, 0),
                                   100,
                                 )}%`,
                               }}
@@ -1315,25 +1329,76 @@ function App() {
                             />
                           </div>
 
-                          <div className="recommendation-detail-row">
-                            <span>Similarity to disliked songs</span>
+                          {song.favorite_genre_score > 0 && (
+                            <>
+                              <div className="recommendation-detail-row">
+                                <span>Favorite genre match</span>
 
-                            <strong>
-                              {(song.negative_similarity * 100).toFixed(0)}%
-                            </strong>
-                          </div>
+                                <strong>100%</strong>
+                              </div>
 
-                          <div className="recommendation-detail-bar negative">
-                            <div
-                              className="recommendation-detail-fill negative"
-                              style={{
-                                width: `${Math.min(
-                                  Math.max(song.negative_similarity * 100, 0),
-                                  100,
-                                )}%`,
-                              }}
-                            />
-                          </div>
+                              <div className="recommendation-detail-bar">
+                                <div
+                                  className="recommendation-detail-fill"
+                                  style={{
+                                    width: "100%",
+                                  }}
+                                />
+                              </div>
+                            </>
+                          )}
+
+                          {song.favorite_artist_score > 0 && (
+                            <>
+                              <div className="recommendation-detail-row">
+                                <span>Favorite artist match</span>
+
+                                <strong>100%</strong>
+                              </div>
+
+                              <div className="recommendation-detail-bar">
+                                <div
+                                  className="recommendation-detail-fill"
+                                  style={{
+                                    width: "100%",
+                                  }}
+                                />
+                              </div>
+                            </>
+                          )}
+
+                          {song.collaborative_support > 0 && (
+                            <>
+                              <div className="recommendation-detail-row">
+                                <span>Similar-user signal</span>
+
+                                <strong>
+                                  {(song.collaborative_score * 100).toFixed(0)}%
+                                </strong>
+                              </div>
+
+                              <div className="recommendation-detail-bar">
+                                <div
+                                  className="recommendation-detail-fill"
+                                  style={{
+                                    width: `${Math.min(
+                                      Math.max(
+                                        song.collaborative_score * 100,
+                                        0,
+                                      ),
+                                      100,
+                                    )}%`,
+                                  }}
+                                />
+                              </div>
+
+                              <div className="recommendation-detail-row">
+                                <span>Similar-user support</span>
+
+                                <strong>{song.collaborative_support}</strong>
+                              </div>
+                            </>
+                          )}
                         </div>
                       )}
                     </div>
@@ -1461,10 +1526,7 @@ function App() {
                     <div className="song-details">
                       <span>Duration</span>
 
-                      <strong>
-                        {Math.floor(song.duration / 60)}:
-                        {String(song.duration % 60).padStart(2, "0")}
-                      </strong>
+                      <strong>{formatDuration(song.duration)}</strong>
                     </div>
 
                     {user ? (

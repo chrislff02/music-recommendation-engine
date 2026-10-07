@@ -46,6 +46,13 @@
                   "kind": "scalar"
                 }
               },
+              "musicBrainzId": {
+                "nullable": true,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              },
               "name": {
                 "nullable": false,
                 "type": {
@@ -90,6 +97,9 @@
               "fields": {
                 "id": {
                   "column": "id"
+                },
+                "musicBrainzId": {
+                  "column": "musicBrainzId"
                 },
                 "name": {
                   "column": "name"
@@ -337,6 +347,20 @@
                   "kind": "scalar"
                 }
               },
+              "listenCount": {
+                "nullable": true,
+                "type": {
+                  "codecId": "pg/int8@1",
+                  "kind": "scalar"
+                }
+              },
+              "listenerCount": {
+                "nullable": true,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              },
               "liveness": {
                 "nullable": true,
                 "type": {
@@ -344,10 +368,24 @@
                   "kind": "scalar"
                 }
               },
+              "musicBrainzId": {
+                "nullable": true,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              },
               "popularity": {
                 "nullable": true,
                 "type": {
                   "codecId": "pg/float8@1",
+                  "kind": "scalar"
+                }
+              },
+              "releaseYear": {
+                "nullable": true,
+                "type": {
+                  "codecId": "pg/int4@1",
                   "kind": "scalar"
                 }
               },
@@ -468,11 +506,23 @@
                 "instrumentalness": {
                   "column": "instrumentalness"
                 },
+                "listenCount": {
+                  "column": "listenCount"
+                },
+                "listenerCount": {
+                  "column": "listenerCount"
+                },
                 "liveness": {
                   "column": "liveness"
                 },
+                "musicBrainzId": {
+                  "column": "musicBrainzId"
+                },
                 "popularity": {
                   "column": "popularity"
+                },
+                "releaseYear": {
+                  "column": "releaseYear"
                 },
                 "speechiness": {
                   "column": "speechiness"
@@ -799,6 +849,11 @@
                   "nativeType": "int4",
                   "nullable": false
                 },
+                "musicBrainzId": {
+                  "codecId": "pg/text@1",
+                  "nativeType": "text",
+                  "nullable": true
+                },
                 "name": {
                   "codecId": "pg/text@1",
                   "nativeType": "text",
@@ -816,6 +871,11 @@
                 {
                   "columns": [
                     "name"
+                  ]
+                },
+                {
+                  "columns": [
+                    "musicBrainzId"
                   ]
                 }
               ]
@@ -1021,14 +1081,34 @@
                   "nativeType": "float8",
                   "nullable": true
                 },
+                "listenCount": {
+                  "codecId": "pg/int8@1",
+                  "nativeType": "int8",
+                  "nullable": true
+                },
+                "listenerCount": {
+                  "codecId": "pg/int4@1",
+                  "nativeType": "int4",
+                  "nullable": true
+                },
                 "liveness": {
                   "codecId": "pg/float8@1",
                   "nativeType": "float8",
                   "nullable": true
                 },
+                "musicBrainzId": {
+                  "codecId": "pg/text@1",
+                  "nativeType": "text",
+                  "nullable": true
+                },
                 "popularity": {
                   "codecId": "pg/float8@1",
                   "nativeType": "float8",
+                  "nullable": true
+                },
+                "releaseYear": {
+                  "codecId": "pg/int4@1",
+                  "nativeType": "int4",
                   "nullable": true
                 },
                 "speechiness": {
@@ -1110,6 +1190,14 @@
                 },
                 {
                   "columns": [
+                    "releaseYear"
+                  ],
+                  "name": "Song_releaseYear_idx_a285856b",
+                  "prefix": "Song_releaseYear_idx",
+                  "unique": false
+                },
+                {
+                  "columns": [
                     "title"
                   ],
                   "name": "Song_title_idx_1c94c7b6",
@@ -1126,6 +1214,11 @@
                 {
                   "columns": [
                     "externalId"
+                  ]
+                },
+                {
+                  "columns": [
+                    "musicBrainzId"
                   ]
                 }
               ]
@@ -1395,7 +1488,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "16d717383f6695308baaa97761ee24b975beff81c916acba7fb74c1132ce4339"
+    "storageHash": "9d1746249de938e6ce7b744e7854084fd60cb028ee49b1ca9d957279ce84141d"
   },
   "execution": {
     "executionHash": "efbabb44840e3792bf0a5ca881dab3e4274ea4133bf908d7e0393da684e34603",
