@@ -15,3 +15,8 @@ recommender/.venv/
 
 data/raw/
 data/processed/
+
+server/.agents/
+server/.claude/
+server/.cursor/
+server/.devin/

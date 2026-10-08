@@ -145,6 +145,35 @@ The current catalog includes the following main genres:
 - Vitest
 - Supertest
 
+## Project Structure
+
+```text
+music-recommendation-engine/
+├── client/
+│   ├── src/
+│   └── React + TypeScript frontend
+│
+├── server/
+│   ├── src/
+│   ├── tests/
+│   └── Express + TypeScript backend
+│
+├── recommender/
+│   ├── src/
+│   │   └── preprocessing/
+│   │       ├── recommend.py
+│   │       ├── import_to_db.py
+│   │       └── catalog/
+│   └── tests/
+│
+├── data/
+│   ├── raw/
+│   └── processed/
+│
+├── README.md
+└── .gitignore
+```
+
 ## Catalog Pipeline
 
 The catalog-building workflow is located in:
@@ -436,20 +465,6 @@ MusicMatch performs a final diversity reranking step that:
 - limits the number of songs from the same artist
 - reduces excessive genre repetition
 - keeps high-scoring songs near the top of the list
-
-```markdown
-### Browse Songs
-
-![Browse Songs](screenshots/browse.png)
-
-### Taste Profile
-
-![Taste Profile](screenshots/taste-profile.png)
-
-### Recommendations
-
-![Recommendations](screenshots/recommendations.png)
-```
 
 ## Future Improvements
 
