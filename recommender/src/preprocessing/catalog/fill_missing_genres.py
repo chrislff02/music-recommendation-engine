@@ -1,8 +1,21 @@
+"""
+Fill missing catalog genres using artist-level fallback mappings.
+
+Most genres are discovered & normalized earlier in the catalog pipeline.
+This script only fills remaining gaps for well-known artists whose primary
+MusicMatch genre is known.
+
+Existing genre values are preserved and only missing entries are updated.
+"""
+
 import pandas as pd
 
 from .config import PROCESSED_CATALOG_DIR
 
 
+# Fallback genre assignments for recognizable artists whose songs may not
+# have received a usable genre from MusicBrainz metadata.
+# These values are only applied when normalized_genre is currently missing.
 ARTIST_GENRE_MAP = {
     # Rock
     "Fleetwood Mac": "Rock",
@@ -92,6 +105,8 @@ ARTIST_GENRE_MAP = {
 
 
 def main():
+    """Fill missing genres and save the genre-completed catalog stage."""
+
     input_path = (
         PROCESSED_CATALOG_DIR
         / "catalog_final_prototype.csv"
@@ -106,6 +121,7 @@ def main():
         input_path
     )
 
+    # Count missing genres before applying the artist-level fallback map.
     missing_before = (
         songs["normalized_genre"]
         .isna()
@@ -117,11 +133,15 @@ def main():
         f"{missing_before}"
     )
 
+    # Only update songs that still do not have a normalized genre.
+    # Existing genre assignments from earlier pipeline stages are preserved.
     missing_mask = (
         songs["normalized_genre"]
         .isna()
     )
 
+    # Map the song's artist name to a fallback genre when one is available.
+    # Artists not present in ARTIST_GENRE_MAP remain missing.
     songs.loc[
         missing_mask,
         "normalized_genre",
@@ -135,6 +155,7 @@ def main():
         )
     )
 
+    # Report how many songs still have no genre after the fallback step.
     missing_after = (
         songs["normalized_genre"]
         .isna()
@@ -146,6 +167,8 @@ def main():
         f"{missing_after}"
     )
 
+    # Print the final genre distribution so the results can be quickly
+    # inspected for unexpected imbalances or missing categories.
     print()
     print("Genre counts:")
 
@@ -157,6 +180,7 @@ def main():
         .to_string()
     )
 
+    # Save the updated catalog for the final preparation/import stages.
     songs.to_csv(
         output_path,
         index=False,

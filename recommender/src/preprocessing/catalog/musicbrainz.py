@@ -1,3 +1,15 @@
+"""
+Helpers for communicating with the MusicBrainz public API.
+
+This module:
+1. Sends MusicBrainz requests using the project's shared User-Agent.
+2. Respects the public API rate limit by delaying requests.
+3. Retries temporary failures such as rate limits & server errors.
+4. Finds artists from human-readable names.
+5. Loads recording metadata and tags.
+6. Searches for recordings by title & artist.
+"""
+
 import time
 
 import requests
@@ -10,14 +22,17 @@ from .config import (
 )
 
 
+# Shared HTTP headers for every MusicBrainz request.
 HEADERS = {
     "User-Agent": USER_AGENT,
     "Accept": "application/json",
 }
 
 
+# Maximum number of attempts before giving up on a request.
 MAX_RETRIES = 5
 
+# These HTTP responses are commonly temporary & worth retrying.
 RETRYABLE_STATUS_CODES = {
     429,
     500,
@@ -31,6 +46,15 @@ def musicbrainz_get(
     endpoint,
     params=None,
 ):
+    """
+    Send a GET request to the MusicBrainz API with retry handling.
+
+    Requests are delayed to respect the public API rate limit.
+    Temporary network/server failures are retried using exponential
+    backoff, while Retry-After is respected when MusicBrainz provides it.
+
+    Returns the parsed JSON response.
+    """
     url = (
         f"{MUSICBRAINZ_BASE_URL}/{endpoint}"
     )
@@ -39,8 +63,7 @@ def musicbrainz_get(
         1,
         MAX_RETRIES + 1,
     ):
-        # Keep MusicBrainz requests safely below
-        # the public API rate limit.
+        # Keep requests below the MusicBrainz public API rate limit.
         time.sleep(
             MUSICBRAINZ_REQUEST_DELAY
         )
@@ -54,6 +77,8 @@ def musicbrainz_get(
             )
 
         except requests.RequestException as error:
+            # Retry temporary network-level failures unless this was
+            # the final permitted attempt.
             if attempt == MAX_RETRIES:
                 raise
 
@@ -71,6 +96,7 @@ def musicbrainz_get(
 
             continue
 
+        # Rate limits & server errors are treated as temporary failures.
         if response.status_code in (
             RETRYABLE_STATUS_CODES
         ):
@@ -83,6 +109,8 @@ def musicbrainz_get(
                 )
             )
 
+            # Prefer MusicBrainz's Retry-After value when it is valid.
+            # Otherwise, fall back to exponential backoff.
             if retry_after:
                 try:
                     wait_seconds = max(
@@ -110,10 +138,12 @@ def musicbrainz_get(
 
             continue
 
+        # Non-retryable HTTP failures should surface immediately.
         response.raise_for_status()
 
         return response.json()
 
+    # Defensive fallback in case the retry loop exits unexpectedly.
     raise RuntimeError(
         "MusicBrainz request failed "
         "after all retry attempts."
@@ -123,6 +153,14 @@ def musicbrainz_get(
 def find_artist(
     artist_name,
 ):
+    """
+    Find the best MusicBrainz artist match for a given artist name.
+
+    Exact case-insensitive name matches are preferred. If no exact
+    match exists, the highest-ranked MusicBrainz search result is used.
+
+    Returns a simplified artist dictionary or None when no result exists.
+    """
     data = musicbrainz_get(
         "artist",
         params={
@@ -142,6 +180,8 @@ def find_artist(
     if not artists:
         return None
 
+    # Prefer exact name matches so the catalog does not accidentally
+    # resolve a seed artist to a similarly named performer.
     exact_matches = [
         artist
         for artist in artists
@@ -155,6 +195,7 @@ def find_artist(
     if exact_matches:
         artist = exact_matches[0]
     else:
+        # MusicBrainz already returns results in relevance order.
         artist = artists[0]
 
     return {
@@ -168,9 +209,16 @@ def find_artist(
         ),
     }
 
+
 def get_recording_details(
     recording_mbid,
 ):
+    """
+    Load detailed metadata for a specific MusicBrainz recording.
+
+    Releases & community tags are included because later catalog
+    stages use them for release-year and genre enrichment.
+    """
     return musicbrainz_get(
         f"recording/{recording_mbid}",
         params={
@@ -179,9 +227,15 @@ def get_recording_details(
         },
     )
 
+
 def search_recording_details(
     recording_mbid,
 ):
+    """
+    Search MusicBrainz for a recording by its recording MBID.
+
+    Returns the first matching recording or None when no result exists.
+    """
     data = musicbrainz_get(
         "recording",
         params={
@@ -201,10 +255,17 @@ def search_recording_details(
 
     return recordings[0]
 
+
 def search_song_by_title_and_artist(
     title,
     artist_mbid,
 ):
+    """
+    Search for recordings using both song title & artist MBID.
+
+    The returned results are used by later pipeline stages to compare
+    matching recordings & estimate the earliest release year.
+    """
     query = (
         f'recording:"{title}" '
         f'AND arid:{artist_mbid}'

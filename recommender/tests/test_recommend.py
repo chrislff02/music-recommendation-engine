@@ -1,8 +1,25 @@
+"""
+Tests for the MusicMatch recommendation engine.
+
+These tests cover:
+- Excluding already-rated songs
+- Neutral and empty-rating behavior
+- Genre and artist preference learning
+- Rating recency
+- Onboarding preferences
+- Recommendation diversity
+- Collaborative filtering
+- Cold-start behavior
+"""
+
 import sys
 from pathlib import Path
 
 import pandas as pd
 
+
+# Allow tests to import the recommender package when pytest is run
+# from the recommender project directory.
 sys.path.append(
     str(
         Path(__file__).resolve().parents[1]
@@ -20,36 +37,31 @@ def make_song(
     title,
     artist,
     genre,
-    tempo,
-    energy,
-    danceability,
-    valence,
-    acousticness,
-    instrumentalness,
-    speechiness,
-    liveness,
     popularity,
 ):
+    """
+    Build a lightweight song dictionary for recommendation tests.
+
+    Only fields used by the current metadata-based recommender are
+    included so tests stay focused on active recommendation behavior.
+    """
     return {
         "id": song_id,
         "title": title,
         "externalId": str(song_id),
         "artist": artist,
         "genre": genre,
-        "tempo": tempo,
-        "energy": energy,
-        "danceability": danceability,
-        "valence": valence,
-        "acousticness": acousticness,
-        "instrumentalness": instrumentalness,
-        "speechiness": speechiness,
-        "liveness": liveness,
         "popularity": popularity,
         "duration": 200,
     }
 
 
+# --------------------------------------------------
+# BASIC RECOMMENDATION BEHAVIOR
+# --------------------------------------------------
+
 def test_rated_songs_are_excluded():
+    """Songs the user has already rated should not be recommended again."""
     songs = pd.DataFrame(
         [
             make_song(
@@ -57,14 +69,6 @@ def test_rated_songs_are_excluded():
                 "Liked Song",
                 "Artist A",
                 "Rock",
-                120,
-                0.8,
-                0.7,
-                0.7,
-                0.2,
-                0.1,
-                0.1,
-                0.2,
                 0.8,
             ),
             make_song(
@@ -72,14 +76,6 @@ def test_rated_songs_are_excluded():
                 "Candidate Song",
                 "Artist B",
                 "Rock",
-                121,
-                0.79,
-                0.71,
-                0.69,
-                0.21,
-                0.11,
-                0.09,
-                0.19,
                 0.7,
             ),
             make_song(
@@ -87,14 +83,6 @@ def test_rated_songs_are_excluded():
                 "Another Candidate",
                 "Artist C",
                 "Pop",
-                90,
-                0.4,
-                0.5,
-                0.6,
-                0.5,
-                0.2,
-                0.1,
-                0.3,
                 0.6,
             ),
         ]
@@ -124,6 +112,10 @@ def test_rated_songs_are_excluded():
 
 
 def test_neutral_ratings_return_no_recommendations():
+    """
+    A three-star rating is neutral & should not create a learned
+    positive/negative taste profile by itself.
+    """
     songs = pd.DataFrame(
         [
             make_song(
@@ -131,14 +123,6 @@ def test_neutral_ratings_return_no_recommendations():
                 "Neutral Song",
                 "Artist A",
                 "Rock",
-                120,
-                0.8,
-                0.7,
-                0.7,
-                0.2,
-                0.1,
-                0.1,
-                0.2,
                 0.8,
             ),
             make_song(
@@ -146,14 +130,6 @@ def test_neutral_ratings_return_no_recommendations():
                 "Candidate Song",
                 "Artist B",
                 "Rock",
-                121,
-                0.79,
-                0.71,
-                0.69,
-                0.21,
-                0.11,
-                0.09,
-                0.19,
                 0.7,
             ),
         ]
@@ -177,7 +153,12 @@ def test_neutral_ratings_return_no_recommendations():
 
     assert recommendations.empty
 
+
 def test_artist_diversity_limit():
+    """
+    Diversity reranking should prevent one artist from dominating
+    the recommendation list.
+    """
     songs = pd.DataFrame(
         [
             make_song(
@@ -185,14 +166,6 @@ def test_artist_diversity_limit():
                 "Liked Song",
                 "Artist A",
                 "Rock",
-                120,
-                0.8,
-                0.7,
-                0.7,
-                0.2,
-                0.1,
-                0.1,
-                0.2,
                 0.9,
             ),
             make_song(
@@ -200,14 +173,6 @@ def test_artist_diversity_limit():
                 "Artist B Song 1",
                 "Artist B",
                 "Rock",
-                121,
-                0.79,
-                0.71,
-                0.69,
-                0.21,
-                0.11,
-                0.09,
-                0.19,
                 0.9,
             ),
             make_song(
@@ -215,14 +180,6 @@ def test_artist_diversity_limit():
                 "Artist B Song 2",
                 "Artist B",
                 "Rock",
-                122,
-                0.78,
-                0.72,
-                0.68,
-                0.22,
-                0.12,
-                0.08,
-                0.18,
                 0.85,
             ),
             make_song(
@@ -230,14 +187,6 @@ def test_artist_diversity_limit():
                 "Artist B Song 3",
                 "Artist B",
                 "Rock",
-                123,
-                0.77,
-                0.73,
-                0.67,
-                0.23,
-                0.13,
-                0.07,
-                0.17,
                 0.8,
             ),
             make_song(
@@ -245,14 +194,6 @@ def test_artist_diversity_limit():
                 "Artist C Song",
                 "Artist C",
                 "Rock",
-                119,
-                0.76,
-                0.69,
-                0.66,
-                0.24,
-                0.14,
-                0.06,
-                0.16,
                 0.75,
             ),
         ]
@@ -281,7 +222,16 @@ def test_artist_diversity_limit():
 
     assert artist_counts.max() <= 2
 
+
+# --------------------------------------------------
+# LEARNED RATING PREFERENCES
+# --------------------------------------------------
+
 def test_high_rated_genre_gets_higher_genre_score():
+    """
+    A genre associated with a positive rating should receive a higher
+    learned preference score than a genre associated with a low rating.
+    """
     songs = pd.DataFrame(
         [
             make_song(
@@ -289,14 +239,6 @@ def test_high_rated_genre_gets_higher_genre_score():
                 "Liked Rock Song",
                 "Artist A",
                 "Rock",
-                120,
-                0.8,
-                0.7,
-                0.7,
-                0.2,
-                0.1,
-                0.1,
-                0.2,
                 0.8,
             ),
             make_song(
@@ -304,14 +246,6 @@ def test_high_rated_genre_gets_higher_genre_score():
                 "Disliked Pop Song",
                 "Artist B",
                 "Pop",
-                100,
-                0.4,
-                0.5,
-                0.4,
-                0.6,
-                0.2,
-                0.1,
-                0.3,
                 0.7,
             ),
             make_song(
@@ -319,14 +253,6 @@ def test_high_rated_genre_gets_higher_genre_score():
                 "Rock Candidate",
                 "Artist C",
                 "Rock",
-                121,
-                0.79,
-                0.71,
-                0.69,
-                0.21,
-                0.11,
-                0.09,
-                0.19,
                 0.75,
             ),
             make_song(
@@ -334,14 +260,6 @@ def test_high_rated_genre_gets_higher_genre_score():
                 "Pop Candidate",
                 "Artist D",
                 "Pop",
-                101,
-                0.41,
-                0.51,
-                0.39,
-                0.59,
-                0.21,
-                0.11,
-                0.29,
                 0.65,
             ),
         ]
@@ -382,7 +300,12 @@ def test_high_rated_genre_gets_higher_genre_score():
 
     assert rock_score > pop_score
 
+
 def test_recent_ratings_have_more_influence_than_old_ratings():
+    """
+    Recency weighting should give recent feedback more influence than
+    an older rating for the same genre.
+    """
     songs = pd.DataFrame(
         [
             make_song(
@@ -390,14 +313,6 @@ def test_recent_ratings_have_more_influence_than_old_ratings():
                 "Old Rock Rating",
                 "Artist A",
                 "Rock",
-                120,
-                0.8,
-                0.7,
-                0.7,
-                0.2,
-                0.1,
-                0.1,
-                0.2,
                 0.8,
             ),
             make_song(
@@ -405,14 +320,6 @@ def test_recent_ratings_have_more_influence_than_old_ratings():
                 "Recent Rock Rating",
                 "Artist B",
                 "Rock",
-                121,
-                0.79,
-                0.71,
-                0.69,
-                0.21,
-                0.11,
-                0.09,
-                0.19,
                 0.8,
             ),
             make_song(
@@ -420,14 +327,6 @@ def test_recent_ratings_have_more_influence_than_old_ratings():
                 "Rock Candidate",
                 "Artist C",
                 "Rock",
-                122,
-                0.78,
-                0.72,
-                0.68,
-                0.22,
-                0.12,
-                0.08,
-                0.18,
                 0.7,
             ),
         ]
@@ -462,7 +361,9 @@ def test_recent_ratings_have_more_influence_than_old_ratings():
 
     assert rock_candidate["genre_score"] > 0.5
 
+
 def test_empty_ratings_return_no_recommendations():
+    """No ratings alone should not create a learned recommendation profile."""
     songs = pd.DataFrame(
         [
             make_song(
@@ -470,14 +371,6 @@ def test_empty_ratings_return_no_recommendations():
                 "Song A",
                 "Artist A",
                 "Rock",
-                120,
-                0.8,
-                0.7,
-                0.7,
-                0.2,
-                0.1,
-                0.1,
-                0.2,
                 0.8,
             ),
         ]
@@ -499,7 +392,16 @@ def test_empty_ratings_return_no_recommendations():
 
     assert recommendations.empty
 
+
+# --------------------------------------------------
+# ONBOARDING PREFERENCES
+# --------------------------------------------------
+
 def test_favorite_genre_boosts_recommendation():
+    """
+    A song matching one of the user's onboarding genres should receive
+    both an onboarding score & a higher final recommendation score.
+    """
     songs = pd.DataFrame(
         [
             make_song(
@@ -507,14 +409,6 @@ def test_favorite_genre_boosts_recommendation():
                 "Liked Song",
                 "Rated Artist",
                 "Rock",
-                120,
-                0.8,
-                0.7,
-                0.7,
-                0.2,
-                0.1,
-                0.1,
-                0.2,
                 0.5,
             ),
             make_song(
@@ -522,14 +416,6 @@ def test_favorite_genre_boosts_recommendation():
                 "Favorite Genre Candidate",
                 "Artist A",
                 "Jazz",
-                120,
-                0.8,
-                0.7,
-                0.7,
-                0.2,
-                0.1,
-                0.1,
-                0.2,
                 0.5,
             ),
             make_song(
@@ -537,14 +423,6 @@ def test_favorite_genre_boosts_recommendation():
                 "Other Genre Candidate",
                 "Artist B",
                 "Pop",
-                120,
-                0.8,
-                0.7,
-                0.7,
-                0.2,
-                0.1,
-                0.1,
-                0.2,
                 0.5,
             ),
         ]
@@ -601,6 +479,10 @@ def test_favorite_genre_boosts_recommendation():
 
 
 def test_favorite_artist_boosts_recommendation():
+    """
+    A song by one of the user's onboarding artists should receive an
+    artist preference boost & mention it in the explanation.
+    """
     songs = pd.DataFrame(
         [
             make_song(
@@ -608,14 +490,6 @@ def test_favorite_artist_boosts_recommendation():
                 "Liked Song",
                 "Rated Artist",
                 "Rock",
-                120,
-                0.8,
-                0.7,
-                0.7,
-                0.2,
-                0.1,
-                0.1,
-                0.2,
                 0.5,
             ),
             make_song(
@@ -623,14 +497,6 @@ def test_favorite_artist_boosts_recommendation():
                 "Favorite Artist Candidate",
                 "Favorite Artist",
                 "Rock",
-                120,
-                0.8,
-                0.7,
-                0.7,
-                0.2,
-                0.1,
-                0.1,
-                0.2,
                 0.5,
             ),
             make_song(
@@ -638,14 +504,6 @@ def test_favorite_artist_boosts_recommendation():
                 "Other Artist Candidate",
                 "Other Artist",
                 "Rock",
-                120,
-                0.8,
-                0.7,
-                0.7,
-                0.2,
-                0.1,
-                0.1,
-                0.2,
                 0.5,
             ),
         ]
@@ -709,9 +567,14 @@ def test_favorite_artist_boosts_recommendation():
 
 
 def test_onboarding_influence_decreases_with_more_ratings():
+    """
+    Onboarding preferences should matter most for new users & fade
+    as enough meaningful ratings are collected.
+    """
     songs_list = []
 
-    # Ten rated songs with identical musical characteristics.
+    # Ten rated songs provide enough feedback to eventually reach
+    # full rating-profile confidence.
     for song_id in range(1, 11):
         songs_list.append(
             make_song(
@@ -719,19 +582,12 @@ def test_onboarding_influence_decreases_with_more_ratings():
                 f"Rated Song {song_id}",
                 f"Rated Artist {song_id}",
                 "Rock",
-                120,
-                0.8,
-                0.7,
-                0.7,
-                0.2,
-                0.1,
-                0.1,
-                0.2,
                 0.5,
             )
         )
 
-    # Two otherwise identical candidates.
+    # These candidates are otherwise identical. The only meaningful
+    # difference is whether the artist matches the onboarding preference.
     songs_list.extend(
         [
             make_song(
@@ -739,14 +595,6 @@ def test_onboarding_influence_decreases_with_more_ratings():
                 "Favorite Artist Candidate",
                 "Favorite Artist",
                 "Rock",
-                120,
-                0.8,
-                0.7,
-                0.7,
-                0.2,
-                0.1,
-                0.1,
-                0.2,
                 0.5,
             ),
             make_song(
@@ -754,14 +602,6 @@ def test_onboarding_influence_decreases_with_more_ratings():
                 "Other Artist Candidate",
                 "Other Artist",
                 "Rock",
-                120,
-                0.8,
-                0.7,
-                0.7,
-                0.2,
-                0.1,
-                0.1,
-                0.2,
                 0.5,
             ),
         ]
@@ -779,11 +619,8 @@ def test_onboarding_influence_decreases_with_more_ratings():
         ]
     )
 
-    # --------------------------------------------------
-    # SPARSE USER:
-    # only one meaningful rating
-    # --------------------------------------------------
-
+    # Sparse user: one meaningful rating means onboarding should
+    # still contribute strongly to recommendation scoring.
     sparse_ratings = pd.DataFrame(
         [
             {
@@ -819,11 +656,8 @@ def test_onboarding_influence_decreases_with_more_ratings():
         - sparse_other_score
     )
 
-    # --------------------------------------------------
-    # EXPERIENCED USER:
-    # ten meaningful ratings -> full confidence
-    # --------------------------------------------------
-
+    # Experienced user: ten meaningful ratings produce full confidence
+    # in the learned rating profile.
     dense_ratings = pd.DataFrame(
         [
             {
@@ -860,20 +694,21 @@ def test_onboarding_influence_decreases_with_more_ratings():
         - dense_other_score
     )
 
-    # With sparse feedback, onboarding should create
-    # a noticeable favorite-artist advantage.
+    # Sparse users should still receive a visible onboarding boost.
     assert sparse_boost > 0
 
-    # Once the user has ten meaningful ratings,
-    # confidence reaches 1.0 and onboarding no longer
-    # changes the final score.
+    # At full rating confidence, onboarding no longer changes the score.
     assert abs(dense_boost) < 1e-9
 
-    # Therefore onboarding has more influence for
-    # a new/sparse user than an experienced user.
+    # Therefore onboarding matters more for a new user.
     assert sparse_boost > dense_boost
 
+
 def test_onboarding_only_can_generate_recommendations():
+    """
+    A new user with no ratings should still receive recommendations
+    when onboarding preferences are available.
+    """
     songs = pd.DataFrame(
         [
             make_song(
@@ -881,14 +716,6 @@ def test_onboarding_only_can_generate_recommendations():
                 "Rock Song",
                 "Artist A",
                 "Rock",
-                120,
-                0.8,
-                0.7,
-                0.7,
-                0.2,
-                0.1,
-                0.1,
-                0.2,
                 0.5,
             ),
             make_song(
@@ -896,14 +723,6 @@ def test_onboarding_only_can_generate_recommendations():
                 "Pop Song",
                 "Artist B",
                 "Pop",
-                120,
-                0.8,
-                0.7,
-                0.7,
-                0.2,
-                0.1,
-                0.1,
-                0.2,
                 0.5,
             ),
         ]
@@ -935,7 +754,12 @@ def test_onboarding_only_can_generate_recommendations():
     assert recommendations.iloc[0]["id"] == 1
     assert recommendations.iloc[0]["favorite_genre_score"] == 1.0
 
+
 def test_no_ratings_and_no_preferences_returns_empty():
+    """
+    A user with neither ratings nor onboarding preferences does not
+    provide enough information for personalized recommendations.
+    """
     songs = pd.DataFrame(
         [
             make_song(
@@ -943,14 +767,6 @@ def test_no_ratings_and_no_preferences_returns_empty():
                 "Song A",
                 "Artist A",
                 "Rock",
-                120,
-                0.8,
-                0.7,
-                0.7,
-                0.2,
-                0.1,
-                0.1,
-                0.2,
                 0.5,
             ),
         ]
@@ -978,7 +794,16 @@ def test_no_ratings_and_no_preferences_returns_empty():
 
     assert recommendations.empty
 
+
+# --------------------------------------------------
+# COLLABORATIVE FILTERING
+# --------------------------------------------------
+
 def test_collaborative_score_rewards_song_liked_by_similar_user():
+    """
+    A candidate liked by a sufficiently similar user should receive
+    a collaborative score above the neutral baseline of 0.5.
+    """
     ratings = pd.DataFrame(
         [
             {
@@ -1010,7 +835,7 @@ def test_collaborative_score_rewards_song_liked_by_similar_user():
                 "updatedAt": pd.Timestamp.now(tz="UTC"),
             },
 
-            # Similar user
+            # Similar user with matching ratings on the two shared songs.
             {
                 "userId": 2,
                 "songId": 1,
@@ -1045,7 +870,12 @@ def test_collaborative_score_rewards_song_liked_by_similar_user():
     assert row["collaborative_support"] == 1
     assert row["collaborative_score"] > 0.5
 
+
 def test_collaborative_score_ignores_user_with_too_little_overlap():
+    """
+    Collaborative filtering should ignore another user when the two
+    users have fewer than the required number of shared rated songs.
+    """
     ratings = pd.DataFrame(
         [
             {
@@ -1077,7 +907,8 @@ def test_collaborative_score_ignores_user_with_too_little_overlap():
                 "updatedAt": pd.Timestamp.now(tz="UTC"),
             },
 
-            # Other user only overlaps on one song
+            # This user overlaps on only one rated song, which is not
+            # enough evidence to influence collaborative recommendations.
             {
                 "userId": 2,
                 "songId": 1,
@@ -1106,7 +937,12 @@ def test_collaborative_score_ignores_user_with_too_little_overlap():
     assert row["collaborative_support"] == 0
     assert row["collaborative_score"] == 0.5
 
+
 def test_collaborative_filtering_boosts_final_recommendation_score():
+    """
+    A candidate supported by a similar user's ratings should rank above
+    an otherwise equivalent candidate with no collaborative evidence.
+    """
     songs = pd.DataFrame(
         [
             make_song(
@@ -1114,14 +950,6 @@ def test_collaborative_filtering_boosts_final_recommendation_score():
                 "Liked Song 1",
                 "Artist A",
                 "Rock",
-                120,
-                0.8,
-                0.7,
-                0.7,
-                0.2,
-                0.1,
-                0.1,
-                0.2,
                 0.5,
             ),
             make_song(
@@ -1129,14 +957,6 @@ def test_collaborative_filtering_boosts_final_recommendation_score():
                 "Liked Song 2",
                 "Artist B",
                 "Rock",
-                121,
-                0.79,
-                0.71,
-                0.69,
-                0.21,
-                0.11,
-                0.09,
-                0.19,
                 0.5,
             ),
             make_song(
@@ -1144,14 +964,6 @@ def test_collaborative_filtering_boosts_final_recommendation_score():
                 "Collaborative Candidate",
                 "Artist C",
                 "Rock",
-                110,
-                0.6,
-                0.6,
-                0.6,
-                0.3,
-                0.2,
-                0.1,
-                0.2,
                 0.5,
             ),
             make_song(
@@ -1159,14 +971,6 @@ def test_collaborative_filtering_boosts_final_recommendation_score():
                 "Non Collaborative Candidate",
                 "Artist D",
                 "Rock",
-                110,
-                0.6,
-                0.6,
-                0.6,
-                0.3,
-                0.2,
-                0.1,
-                0.2,
                 0.5,
             ),
         ]
@@ -1203,7 +1007,7 @@ def test_collaborative_filtering_boosts_final_recommendation_score():
                 "updatedAt": pd.Timestamp.now(tz="UTC"),
             },
 
-            # Similar user
+            # Similar user agrees on both shared songs & also likes song 3.
             {
                 "userId": 2,
                 "songId": 1,

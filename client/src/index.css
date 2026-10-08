@@ -1,3 +1,9 @@
+/*
+ * Global page-level styles for the MusicMatch frontend.
+ * Ensures the document and React root fill the viewport and provides
+ * the base black background behind the main application layout.
+ */
+
 html {
   margin: 0;
   padding: 0;

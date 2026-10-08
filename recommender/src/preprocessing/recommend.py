@@ -1,3 +1,11 @@
+"""
+Generates personalized song recommendations using onboarding preferences,
+recency-weighted ratings, learned genre & artist preferences,
+user-based collaborative filtering, popularity & diversity reranking.
+
+The module can be imported by tests/executed directly from the
+command line by the Node/Express backend.
+"""
 from pathlib import Path
 
 import json
@@ -45,6 +53,8 @@ RETURN_COLUMNS = [
 
 
 def load_songs(engine):
+    """Load the full song catalog & related artist/genre metadata."""
+
     query = text(
         """
         SELECT
@@ -78,6 +88,8 @@ def load_ratings(
     engine,
     user_id,
 ):
+    """Load all ratings submitted by a specific user."""
+
     query = text(
         """
         SELECT
@@ -100,6 +112,8 @@ def load_ratings(
 
 
 def load_all_ratings(engine):
+    """Load ratings from all users for collaborative filtering."""
+
     query = text(
         """
         SELECT
@@ -124,6 +138,8 @@ def load_favorite_genres(
     engine,
     user_id,
 ):
+    """Load the genres selected in a user's taste profile."""
+
     query = text(
         """
         SELECT
@@ -148,6 +164,8 @@ def load_favorite_artists(
     engine,
     user_id,
 ):
+    """Load the artists selected in a user's taste profile."""
+
     query = text(
         """
         SELECT
@@ -172,12 +190,18 @@ def load_favorite_artists(
 # ONBOARDING PREFERENCES
 # --------------------------------------------------
 
-
 def prepare_onboarding_preferences(
     songs,
     favorite_genres,
     favorite_artists,
 ):
+    """
+    Add favorite-genre & favorite-artist match scores to each song.
+
+    Returns the updated song DataFrame, the selected genre & artist
+    names & whether the user has any onboarding preferences.
+    """
+
     if favorite_genres is None:
         favorite_genres = pd.DataFrame(
             columns=["genre"]
@@ -249,8 +273,14 @@ def prepare_onboarding_preferences(
 # RATING RECENCY
 # --------------------------------------------------
 
-
 def add_recency_weights(rated):
+    """
+    Add an exponential recency weight to each rating.
+
+    Ratings gradually lose influence over time using a 180 day
+    half-life, while newer ratings receive greater weight.
+    """
+
     rated = rated.copy()
 
     rated["updatedAt"] = pd.to_datetime(
@@ -290,11 +320,17 @@ def add_recency_weights(rated):
 # LEARNED GENRE / ARTIST PREFERENCES
 # --------------------------------------------------
 
-
 def calculate_preference_scores(
     rated,
     column,
 ):
+    """
+    Calculate recency-weighted preference scores for genres/artists.
+
+    The weighted 1-5 rating average is normalized to a 0-1 score,
+    where higher values represent stronger user preference.
+    """
+
     scores = {}
 
     usable = rated.dropna(
@@ -345,6 +381,12 @@ def apply_learned_preferences(
     genre_scores,
     artist_scores,
 ):
+    """
+    Attach learned genre & artist preference scores to candidate songs.
+
+    Unknown genres/artists receive a neutral score of 0.5.
+    """
+
     songs = songs.copy()
 
     songs["genre_score"] = (
@@ -382,13 +424,24 @@ def apply_learned_preferences(
 # COLLABORATIVE FILTERING
 # --------------------------------------------------
 
-
 def calculate_collaborative_scores(
     user_id,
     ratings,
     all_ratings,
     candidate_song_ids,
 ):
+    """
+    Score candidate songs using user-based collaborative filtering.
+
+    Users are compared using cosine similarity over overlapping
+    non-neutral ratings. Similarities are reduced when based on only
+    a small number of shared ratings & only positively similar users
+    contribute to candidate song predictions.
+
+    Returns a collaborative score from 0 to 1 & the number of similar
+    users that contributed to each candidate song.
+    """
+
     candidate_song_ids = list(
         candidate_song_ids
     )
@@ -640,8 +693,14 @@ def calculate_collaborative_scores(
 # EXPLANATIONS
 # --------------------------------------------------
 
-
 def build_explanation(row):
+    """
+    Build a human-readable explanation for a recommendation.
+
+    Explanations may reference favorite artists/genres/learned
+    rating preferences/collaborative signals/popularity.
+    """
+
     reasons = []
 
     if row[
@@ -729,11 +788,17 @@ def build_explanation(row):
 # DIVERSITY RERANKING
 # --------------------------------------------------
 
-
 def diversity_rerank(
     recommendations,
     limit,
 ):
+    """
+    Rerank high-scoring songs to improve artist & genre diversity.
+
+    At most two songs from the same artist are selected & repeated
+    genres receive a small score penalty during reranking.
+    """
+
     if recommendations.empty:
         return recommendations
 
@@ -798,7 +863,7 @@ def diversity_rerank(
             ):
                 continue
 
-            # Small metadata-based diversity penalty.
+            # Small metadata based diversity penalty.
             # Repeated genres are allowed, but songs
             # from genres already selected lose a
             # little reranking score.
@@ -891,12 +956,18 @@ def diversity_rerank(
 # COLD START
 # --------------------------------------------------
 
-
 def build_cold_start_recommendations(
     songs,
     rated_song_ids,
     limit,
 ):
+    """
+    Generate recommendations when the user lacks meaningful rating data.
+
+    Favorite genres & artists provide the primary personalization
+    signal, while popularity acts as a smaller tie-breaking signal.
+    """
+
     recommendations = songs[
         ~songs["id"].isin(
             rated_song_ids
@@ -979,7 +1050,6 @@ def build_cold_start_recommendations(
 # MAIN RECOMMENDATION LOGIC
 # --------------------------------------------------
 
-
 def build_recommendations_from_data(
     songs,
     ratings,
@@ -989,12 +1059,20 @@ def build_recommendations_from_data(
     user_id=None,
     limit=10,
 ):
+    """
+    Generate personalized recommendations from catalog & user data.
+
+    Combines onboarding preferences, recency-weighted rating history,
+    learned genre/artist preferences, collaborative filtering &
+    popularity before applying diversity reranking.
+    """
+
     if songs is None or songs.empty:
         return pd.DataFrame()
 
     songs = songs.copy()
 
-    # Some test fixtures or older song data may not
+    # Some test fixtures/older song data may not
     # include releaseYear. Treat it as unknown.
     if "releaseYear" not in songs.columns:
         songs["releaseYear"] = pd.NA
@@ -1025,6 +1103,7 @@ def build_recommendations_from_data(
         favorite_artists=favorite_artists,
     )
 
+
     # ----------------------------------------------
     # NO RATINGS: COLD START
     # ----------------------------------------------
@@ -1038,6 +1117,7 @@ def build_recommendations_from_data(
             rated_song_ids=set(),
             limit=limit,
         )
+
 
     # ----------------------------------------------
     # MATCH RATINGS TO SONGS
@@ -1074,7 +1154,7 @@ def build_recommendations_from_data(
         meaningful_ratings
     )
 
-    # Neutral-only ratings do not create a taste
+    # Neutral only ratings do not create a taste
     # profile. Onboarding can still provide useful
     # recommendations.
     if meaningful_rating_count == 0:
@@ -1088,6 +1168,7 @@ def build_recommendations_from_data(
             )
 
         return pd.DataFrame()
+
 
     # ----------------------------------------------
     # LEARN TASTE FROM RATINGS
@@ -1113,6 +1194,7 @@ def build_recommendations_from_data(
         artist_scores=artist_scores,
     )
 
+
     # ----------------------------------------------
     # REMOVE ALREADY-RATED SONGS
     # ----------------------------------------------
@@ -1129,6 +1211,7 @@ def build_recommendations_from_data(
 
     if recommendations.empty:
         return pd.DataFrame()
+
 
     # ----------------------------------------------
     # COLLABORATIVE FILTERING
@@ -1174,6 +1257,7 @@ def build_recommendations_from_data(
         .astype(int)
     )
 
+
     # ----------------------------------------------
     # PERSONALIZATION CONFIDENCE
     # ----------------------------------------------
@@ -1186,10 +1270,13 @@ def build_recommendations_from_data(
         1.0,
     )
 
+
     # ----------------------------------------------
     # COMPONENT SCORES
     # ----------------------------------------------
 
+    # Genre preference contributes slightly more than artist preference
+    # so recommendations can generalize beyond artists the user already knows.
     rating_profile_score = (
         recommendations[
             "genre_score"
@@ -1202,6 +1289,8 @@ def build_recommendations_from_data(
         * 0.40
     )
 
+    # Favorite genres receive slightly more weight than favorite artists
+    # to encourage discovery beyond the user's selected artists.
     onboarding_score = (
         recommendations[
             "favorite_genre_score"
@@ -1214,6 +1303,8 @@ def build_recommendations_from_data(
         * 0.40
     )
 
+    # Increase collaborative influence as more similar users support a song.
+    # Three or more supporting users gives this signal full confidence.
     collaborative_confidence = (
         recommendations[
             "collaborative_support"
@@ -1225,10 +1316,14 @@ def build_recommendations_from_data(
         / 3
     )
 
+
     # ----------------------------------------------
     # FINAL SCORE
     # ----------------------------------------------
 
+    # As the user provides more ratings, learned preferences gradually
+    # replace onboarding preferences as the main personalization signal.
+    # Collaborative filtering & popularity remain secondary signals.
     rating_weight = (
         0.55
         * confidence
@@ -1288,6 +1383,7 @@ def build_recommendations_from_data(
         )
     )
 
+
     # ----------------------------------------------
     # EXPLANATIONS
     # ----------------------------------------------
@@ -1298,6 +1394,7 @@ def build_recommendations_from_data(
         build_explanation,
         axis=1,
     )
+
 
     # ----------------------------------------------
     # DIVERSITY
@@ -1320,11 +1417,15 @@ def build_recommendations_from_data(
 # DATABASE ENTRY POINT
 # --------------------------------------------------
 
-
 def build_recommendations(
     user_id,
     limit=10,
 ):
+    """
+    Load recommendation data from PostgreSQL & generate results
+    for the requested user.
+    """
+
     database_url = os.getenv(
         "DATABASE_URL"
     )
@@ -1388,8 +1489,8 @@ def build_recommendations(
 # COMMAND-LINE ENTRY POINT
 # --------------------------------------------------
 
-
 def main():
+    """Run the recommender from the command line and output JSON."""
     if len(sys.argv) < 2:
         print(
             json.dumps(

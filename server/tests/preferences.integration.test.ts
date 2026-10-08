@@ -4,11 +4,15 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import app from "../src/app";
 import { pool } from "../src/db";
 
+// Integration tests for saving & loading a user's taste-profile
+// preferences against the real PostgreSQL database.
 describe("Preferences API integration", () => {
+  // Dedicated test account values keep this test isolated from normal users.
   const testEmail = "api-test-user@example.com";
   const testUsername = "api_test_user";
   const testPassword = "TestPassword123!";
 
+  // Values created/discovered during setup & reused by the tests.
   let token = "";
   let userId = 0;
   let genreId = 0;
@@ -24,6 +28,8 @@ describe("Preferences API integration", () => {
       [testEmail, testUsername],
     );
 
+    // Register a fresh user through the real API so the test also gets
+    // a valid JWT token for the protected preferences routes.
     const registerResponse = await request(app)
       .post("/api/auth/register")
       .send({
@@ -37,6 +43,7 @@ describe("Preferences API integration", () => {
     token = registerResponse.body.token;
     userId = registerResponse.body.user.id;
 
+    // Use existing catalog data instead of creating temporary genres/artists.
     const genreResult = await pool.query(
       `
       SELECT id
@@ -55,6 +62,8 @@ describe("Preferences API integration", () => {
       `,
     );
 
+    // The integration test requires at least one genre & artist
+    // to already exist in the catalog.
     expect(genreResult.rows.length).toBeGreaterThan(0);
     expect(artistResult.rows.length).toBeGreaterThan(0);
 
@@ -63,6 +72,8 @@ describe("Preferences API integration", () => {
   });
 
   afterAll(async () => {
+    // Remove the temporary test user after the suite finishes.
+    // Related preference rows are removed through database relations.
     if (userId) {
       await pool.query(
         `
@@ -75,6 +86,7 @@ describe("Preferences API integration", () => {
   });
 
   it("saves preferences for an authenticated user", async () => {
+    // Store one genre & one artist as the user's taste preferences.
     const response = await request(app)
       .put("/api/preferences")
       .set("Authorization", `Bearer ${token}`)
@@ -85,6 +97,7 @@ describe("Preferences API integration", () => {
 
     expect(response.status).toBe(200);
 
+    // Confirm the saved genre is returned by the API.
     expect(response.body.genres).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -93,6 +106,7 @@ describe("Preferences API integration", () => {
       ]),
     );
 
+    // Confirm the saved artist is returned by the API.
     expect(response.body.artists).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -103,12 +117,14 @@ describe("Preferences API integration", () => {
   });
 
   it("loads the saved preferences back", async () => {
+    // Fetch the authenticated user's saved taste profile.
     const response = await request(app)
       .get("/api/preferences")
       .set("Authorization", `Bearer ${token}`);
 
     expect(response.status).toBe(200);
 
+    // Verify that the previously saved genre persisted in PostgreSQL.
     expect(response.body.genres).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -117,6 +133,7 @@ describe("Preferences API integration", () => {
       ]),
     );
 
+    // Verify that the previously saved artist persisted in PostgreSQL.
     expect(response.body.artists).toEqual(
       expect.arrayContaining([
         expect.objectContaining({

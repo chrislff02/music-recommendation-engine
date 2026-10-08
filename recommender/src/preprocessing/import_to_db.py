@@ -1,3 +1,18 @@
+"""
+Replace the current MusicMatch song catalog with the final processed catalog.
+This script imports catalog_ready_for_db.csv into PostgreSQL.
+
+It:
+1. Loads the database connection from server/.env.
+2. Requires explicit confirmation before replacing catalog data.
+3. Preserves users and existing genre records.
+4. Deletes ratings and favorite-artist selections tied to the old catalog.
+5. Rebuilds Artist and Song data from the processed catalog.
+6. Reuses or creates Genre records as needed.
+7. Handles duplicate artist MusicBrainz IDs safely.
+8. Commits the replacement only after the full import succeeds.
+"""
+
 from pathlib import Path
 import os
 
@@ -8,6 +23,7 @@ from dotenv import load_dotenv
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 
+# Final processed catalog produced by prepare_final_catalog.py.
 CATALOG_PATH = (
     PROJECT_ROOT
     / "data"
@@ -16,14 +32,15 @@ CATALOG_PATH = (
     / "catalog_ready_for_db.csv"
 )
 
+# Reuse the same database configuration as the Node/Express backend.
 SERVER_ENV_PATH = (
     PROJECT_ROOT
     / "server"
     / ".env"
 )
 
-
 def clean_optional_int(value):
+    """Convert a nullable catalog value to int, preserving missing values."""
     if pd.isna(value):
         return None
 
@@ -31,6 +48,7 @@ def clean_optional_int(value):
 
 
 def clean_optional_float(value):
+    """Convert a nullable catalog value to float, preserving missing values."""
     if pd.isna(value):
         return None
 
@@ -38,6 +56,10 @@ def clean_optional_float(value):
 
 
 def clean_optional_text(value):
+    """
+    Convert optional text into a cleaned string.
+    Missing or empty values become None so PostgreSQL stores them as NULL.
+    """
     if pd.isna(value):
         return None
 
@@ -50,6 +72,9 @@ def clean_optional_text(value):
 
 
 def main():
+    """Replace the existing song catalog with the processed MusicMatch catalog."""
+
+    # Load DATABASE_URL from the backend environment file.
     load_dotenv(
         SERVER_ENV_PATH
     )
@@ -63,6 +88,7 @@ def main():
             "DATABASE_URL was not found."
         )
 
+    # Fail before touching the database if the prepared catalog is missing.
     if not CATALOG_PATH.exists():
         raise FileNotFoundError(
             f"Catalog file was not found: "
@@ -77,6 +103,14 @@ def main():
         f"Songs to import: {len(songs)}"
     )
 
+
+    # --------------------------------------------------
+    # DESTRUCTIVE-IMPORT CONFIRMATION
+    # --------------------------------------------------
+
+    # Replacing the catalog invalidates song/artist foreign-key references,
+    # so ratings & favorite-artist selections must be removed first.
+    # Users & genre preferences can remain.
     print()
     print(
         "WARNING:"
@@ -93,6 +127,8 @@ def main():
         "Users and favorite genres will be preserved."
     )
 
+    # Require an exact confirmation word to reduce the chance of
+    # accidentally replacing the production/local catalog.
     confirmation = input(
         "\nType REPLACE to continue: "
     )
@@ -103,10 +139,13 @@ def main():
         )
         return
 
+    # psycopg uses a transaction for this connection. The catalog is only
+    # committed after the full replacement succeeds.
     with psycopg.connect(
         database_url
     ) as conn:
         with conn.cursor() as cur:
+
 
             # ------------------------------------------
             # REMOVE OLD CATALOG-DEPENDENT DATA
@@ -117,18 +156,21 @@ def main():
                 "Removing old catalog data..."
             )
 
+            # Ratings reference songs from the old catalog.
             cur.execute(
                 """
                 DELETE FROM "Rating"
                 """
             )
 
+            # Favorite artists reference Artist rows that will be replaced.
             cur.execute(
                 """
                 DELETE FROM "UserFavoriteArtist"
                 """
             )
 
+            # Songs must be removed before artists because Song references Artist.
             cur.execute(
                 """
                 DELETE FROM "Song"
@@ -141,10 +183,13 @@ def main():
                 """
             )
 
+
             # ------------------------------------------
             # PRELOAD EXISTING GENRES
             # ------------------------------------------
 
+            # Genre rows are preserved so existing favorite-genre selections
+            # remain valid where possible.
             cur.execute(
                 """
                 SELECT id, name
@@ -158,13 +203,19 @@ def main():
                 in cur.fetchall()
             }
 
+            # Cache imported artists by name so repeated songs from the same
+            # artist do not repeatedly query/insert the Artist table.
             artist_ids = {}
-            used_artist_mbids = {}
 
+            # Track which MusicBrainz artist IDs have already been assigned.
+            # Some collaboration credits can reuse a primary artist MBID under
+            # a different display name, which would violate the unique constraint.
+            used_artist_mbids = {}
 
             inserted_artists = 0
             inserted_genres = 0
             inserted_songs = 0
+
 
             # ------------------------------------------
             # IMPORT SONGS
@@ -192,6 +243,7 @@ def main():
                     )
                 )
 
+
                 # --------------------------------------
                 # FIND OR CREATE ARTIST
                 # --------------------------------------
@@ -199,6 +251,10 @@ def main():
                 if artist_name not in artist_ids:
                     safe_artist_mbid = artist_mbid
 
+                    # Do not assign the same unique MusicBrainz ID to two
+                    # different artist-credit names. This can happen when a
+                    # collaboration recording is credited differently while
+                    # ListenBrainz still returns the primary artist MBID.
                     if (
                         artist_mbid is not None
                         and artist_mbid in used_artist_mbids
@@ -206,6 +262,8 @@ def main():
                     ):
                         safe_artist_mbid = None
 
+                    # Insert the artist by name. If the name already exists,
+                    # preserve any existing MBID & only fill it when missing.
                     cur.execute(
                         """
                         INSERT INTO "Artist" (
@@ -241,6 +299,8 @@ def main():
                         artist_name
                     ] = artist_id
 
+                    # Track the final MBID stored by PostgreSQL so later
+                    # artist-credit rows can avoid reusing it incorrectly.
                     if stored_mbid is not None:
                         used_artist_mbids[
                             stored_mbid
@@ -252,16 +312,19 @@ def main():
                     artist_name
                 ]
 
+
                 # --------------------------------------
                 # FIND OR CREATE GENRE
                 # --------------------------------------
 
                 genre_id = None
 
+                # Songs with unknown genres are allowed to keep genreId NULL.
                 if genre_name is not None:
 
                     if genre_name not in genre_ids:
 
+                        # Create only genres that do not already exist.
                         cur.execute(
                             """
                             INSERT INTO "Genre" (
@@ -297,10 +360,14 @@ def main():
                             ]
                         )
 
+
                 # --------------------------------------
                 # INSERT SONG
                 # --------------------------------------
 
+                # Each MusicBrainz recording ID should be unique. If a duplicate
+                # somehow survives preprocessing, ON CONFLICT prevents a second
+                # Song row from being created.
                 cur.execute(
                     """
                     INSERT INTO "Song" (
@@ -337,6 +404,8 @@ def main():
                             row["title"]
                         ).strip(),
 
+                        # externalId belonged to the older catalog source &
+                        # is intentionally left NULL for the current catalog.
                         None,
 
                         clean_optional_text(
@@ -381,10 +450,13 @@ def main():
                     ),
                 )
 
+                # rowcount is 1 when a song was inserted & 0 when
+                # ON CONFLICT skipped a duplicate MusicBrainz recording.
                 inserted_songs += (
                     cur.rowcount
                 )
 
+                # Print progress periodically without flooding the terminal.
                 if (
                     (index + 1) % 250 == 0
                     or index + 1 == len(songs)
@@ -395,7 +467,15 @@ def main():
                         f"{len(songs)} songs"
                     )
 
+            # Commit only after every delete/insert step has completed.
+            # If an exception occurs before this point, the transaction can
+            # roll back instead of leaving a partially replaced catalog.
             conn.commit()
+
+
+    # ----------------------------------------------
+    # IMPORT SUMMARY
+    # ----------------------------------------------
 
     print()
     print(

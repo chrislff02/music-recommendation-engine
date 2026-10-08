@@ -1,18 +1,35 @@
 // use prisma-8
 
+// --------------------------------------------------
+// USER ACCOUNTS
+// --------------------------------------------------
+
+// Stores registered MusicMatch users and their account information.
+// User relationships connect each account to:
+// - song ratings
+// - favorite artists
+// - favorite genres
 model User {
-  id        Int      @id @default(autoincrement())
-  email     String   @unique
-  username  String   @unique
+  id           Int      @id @default(autoincrement())
+  email        String   @unique
+  username     String   @unique
   passwordHash String
-  createdAt DateTime @default(now())
-  updatedAt temporal.updatedAt()
+  createdAt    DateTime @default(now())
+  updatedAt    temporal.updatedAt()
 
   ratings         Rating[]
   favoriteArtists UserFavoriteArtist[]
   favoriteGenres  UserFavoriteGenre[]
 }
 
+
+// --------------------------------------------------
+// MUSIC CATALOG
+// --------------------------------------------------
+
+// Stores one row per artist in the MusicMatch catalog.
+// musicBrainzId is optional because some imported artists may not
+// have a MusicBrainz identifier available.
 model Artist {
   id            Int     @id @default(autoincrement())
   name          String  @unique
@@ -22,6 +39,8 @@ model Artist {
   favoritedBy UserFavoriteArtist[]
 }
 
+
+// Stores the normalized genre names used by songs and user preferences.
 model Genre {
   id   Int    @id @default(autoincrement())
   name String @unique
@@ -30,6 +49,11 @@ model Genre {
   favoritedBy UserFavoriteGenre[]
 }
 
+
+// Stores the individual songs available in the MusicMatch catalog.
+// Catalog metadata comes primarily from MusicBrainz and ListenBrainz.
+// Genre is optional because some songs may not have a reliable genre
+// classification in the processed dataset.
 model Song {
   id         Int     @id @default(autoincrement())
   title      String
@@ -38,12 +62,16 @@ model Song {
   musicBrainzId String? @unique
   releaseYear   Int?
 
+  // ListenBrainz popularity-related metadata.
   listenCount   BigInt?
   listenerCount Int?
 
+  // Foreign keys linking each song to its artist and optional genre.
   artistId Int
   genreId  Int?
 
+  // Normalized popularity score used by the recommender.
+  // Duration is stored in seconds.
   popularity Float?
   duration   Float?
 
@@ -55,12 +83,21 @@ model Song {
 
   ratings Rating[]
 
+  // Indexes support common catalog lookups and filtering.
   @@index([artistId])
   @@index([genreId])
   @@index([title])
   @@index([releaseYear])
 }
 
+
+// --------------------------------------------------
+// USER RATINGS
+// --------------------------------------------------
+
+// Stores a user's 1-5 rating for a song.
+// Each user can have only one rating per song. The API uses an
+// upsert operation so rating the same song again updates this row.
 model Rating {
   id        Int      @id @default(autoincrement())
   value     Int
@@ -70,6 +107,7 @@ model Rating {
   userId Int
   songId Int
 
+  // Ratings are removed automatically if their user or song is deleted.
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
   song Song @relation(fields: [songId], references: [id], onDelete: Cascade)
 
@@ -78,6 +116,13 @@ model Rating {
   @@index([songId])
 }
 
+
+// --------------------------------------------------
+// USER TASTE PROFILE
+// --------------------------------------------------
+
+// Join table connecting users to the artists they selected during
+// onboarding or while editing their taste profile.
 model UserFavoriteArtist {
   id        Int      @id @default(autoincrement())
   createdAt DateTime @default(now())
@@ -85,14 +130,19 @@ model UserFavoriteArtist {
   userId   Int
   artistId Int
 
+  // Deleting either side removes the associated preference row.
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
   artist Artist @relation(fields: [artistId], references: [id], onDelete: Cascade)
 
+  // Prevent duplicate favorite-artist selections for the same user.
   @@unique([userId, artistId])
   @@index([userId])
   @@index([artistId])
 }
 
+
+// Join table connecting users to the genres selected in their
+// MusicMatch taste profile.
 model UserFavoriteGenre {
   id        Int      @id @default(autoincrement())
   createdAt DateTime @default(now())
@@ -100,9 +150,11 @@ model UserFavoriteGenre {
   userId  Int
   genreId Int
 
+  // Deleting either side removes the associated preference row.
   user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
   genre Genre @relation(fields: [genreId], references: [id], onDelete: Cascade)
 
+  // Prevent duplicate favorite-genre selections for the same user.
   @@unique([userId, genreId])
   @@index([userId])
   @@index([genreId])

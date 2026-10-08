@@ -1,3 +1,15 @@
+"""
+Curated seed artists used to build the MusicMatch song catalog.
+
+The catalog pipeline uses these names to:
+1. Find the matching artist in MusicBrainz.
+2. Retrieve popular recordings from ListenBrainz.
+3. Build a broad catalog across decades and genres.
+
+The list is intentionally diverse so MusicMatch can recommend music
+from multiple eras and styles rather than overfitting to one genre.
+"""
+
 SEED_ARTISTS = [
     # --------------------------------------------------
     # 1970s / Classic Rock / Pop

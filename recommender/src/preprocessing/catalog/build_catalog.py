@@ -1,3 +1,16 @@
+"""
+Build v1 of the MusicMatch song catalog.
+
+The script:
+1. Looks up each seed artist in MusicBrainz.
+2. Uses the matched MusicBrainz artist ID to fetch popular recordings
+   from ListenBrainz.
+3. Combines the returned metadata into a single song table.
+4. Removes incomplete and duplicate recordings.
+5. Sorts songs by listener/listen counts.
+6. Saves the prototype catalog for later enrichment steps.
+"""
+
 import json
 
 import pandas as pd
@@ -16,13 +29,21 @@ from .musicbrainz import (
 
 
 def main():
+    """Build and save the initial MusicBrainz/ListenBrainz catalog."""
+
+    # Final song rows that will become the prototype catalog.
     rows = []
+
+    # Save the MusicBrainz artist matches separately so they can be
+    # inspected later without repeating every artist lookup.
     artist_matches = []
 
+    # Process every artist selected for the catalog seed list.
     for artist_name in SEED_ARTISTS:
         print(f"Finding {artist_name}...")
 
         try:
+            # Resolve the human-readable artist name to a MusicBrainz artist.
             artist = find_artist(
                 artist_name
             )
@@ -34,6 +55,7 @@ def main():
             )
             continue
 
+        # Skip seed artists that could not be matched confidently.
         if artist is None:
             print(
                 "  No MusicBrainz match."
@@ -50,6 +72,8 @@ def main():
         )
 
         try:
+            # Use the MusicBrainz artist ID to retrieve the artist's
+            # most-listened-to recordings from ListenBrainz.
             recordings = (
                 get_top_recordings_for_artist(
                     artist["mbid"]
@@ -67,6 +91,8 @@ def main():
             f"  {len(recordings)} recordings"
         )
 
+        # Convert each ListenBrainz recording into the normalized columns
+        # used by the rest of the catalog-processing pipeline.
         for recording in recordings:
             rows.append(
                 {
@@ -117,6 +143,7 @@ def main():
                 }
             )
 
+    # Save the resolved MusicBrainz artist matches as raw reference data.
     raw_path = (
         RAW_CATALOG_DIR
         / "artist_matches.json"
@@ -134,12 +161,14 @@ def main():
         rows
     )
 
+    # Stop early if none of the seed artists produced usable recordings.
     if songs.empty:
         print(
             "No songs collected."
         )
         return
 
+    # Core identifiers are required by later enrichment/import steps.
     songs = songs.dropna(
         subset=[
             "recording_mbid",
@@ -148,12 +177,16 @@ def main():
         ]
     )
 
+    # MusicBrainz recording IDs identify unique recordings, keep only
+    # one row per recording if ListenBrainz returned duplicates.
     songs = songs.drop_duplicates(
         subset=[
             "recording_mbid",
         ]
     )
 
+    # Put the most widely listened-to tracks first so the prototype
+    # catalog favors recognizable songs.
     songs = songs.sort_values(
         by=[
             "listener_count",
@@ -166,6 +199,8 @@ def main():
         na_position="last",
     )
 
+    # This prototype becomes the input for the later enrichment,
+    # cleaning, genre & final preparation stages.
     output_path = (
         PROCESSED_CATALOG_DIR
         / "catalog_prototype.csv"
@@ -184,6 +219,8 @@ def main():
         f"Output: {output_path}"
     )
 
+    # Print a small preview so the script can be quickly sanity-checked
+    # after a catalog build finishes.
     print()
     print(
         songs[
