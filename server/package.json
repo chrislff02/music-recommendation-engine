@@ -6,6 +6,7 @@
   "main": "index.js",
   "scripts": {
     "dev": "tsx watch src/index.ts",
+    "start": "tsx src/index.ts",
     "postinstall": "prisma skills sync || exit 0",
     "contract:emit": "prisma contract emit",
     "test": "vitest run"
@@ -21,7 +22,8 @@
     "dotenv": "^18.0.4",
     "express": "^5.2.1",
     "jsonwebtoken": "^9.0.3",
-    "pg": "^8.23.0"
+    "pg": "^8.23.0",
+    "tsx": "^4.23.15"
   },
   "devDependencies": {
     "@prisma/cli-engine": "^0.6.1",
@@ -33,7 +35,6 @@
     "@types/supertest": "^7.2.1",
     "prisma": "^8.0.0-rc.17",
     "supertest": "^7.3.1",
-    "tsx": "^4.23.15",
     "typescript": "^7.0.2",
     "vitest": "^5.0.3"
   }

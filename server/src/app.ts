@@ -19,8 +19,26 @@ const app = express();
 // recommendation route can await the Python process like any other async task.
 const execFileAsync = promisify(execFile);
 
-// Allow requests from the frontend & parse incoming JSON request bodies.
-app.use(cors());
+// Allow requests from the local frontend during development and from the
+// deployed frontend configured through the CLIENT_URL environment variable.
+const allowedOrigins = ["http://localhost:5173", process.env.CLIENT_URL].filter(
+  (origin): origin is string => Boolean(origin),
+);
+
+app.use(
+  cors({
+    origin(origin, callback) {
+      // Requests without an Origin header, such as server-to-server requests
+      // and Supertest integration tests, are allowed.
+      if (!origin || allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+
+      return callback(new Error("Not allowed by CORS"));
+    },
+  }),
+);
+
 app.use(express.json());
 
 // -----------------------------------------------------------------------------
@@ -703,13 +721,12 @@ app.get(
 
       // Use the recommender virtual environment so Python dependencies are
       // isolated from the system installation.
-      const pythonPath = path.join(
-        projectRoot,
-        "recommender",
-        ".venv",
-        "bin",
-        "python",
-      );
+      // Use an explicitly configured Python executable in production.
+      // Local development falls back to the recommender virtual environment.
+      const pythonPath =
+        process.env.PYTHON_EXECUTABLE ??
+        path.join(projectRoot, "recommender", ".venv", "bin", "python");
+
       const recommenderPath = path.join(
         projectRoot,
         "recommender",

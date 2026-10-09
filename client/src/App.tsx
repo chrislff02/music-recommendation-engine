@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import "./App.css";
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL || "http://localhost:5001";
 
 // --------------------------------------------------
 // API DATA TYPES
@@ -169,7 +171,7 @@ function App() {
           params.set("genre", genre);
         }
         const response = await fetch(
-          `http://localhost:5001/api/songs?${params.toString()}`,
+          `${API_BASE_URL}/api/songs?${params.toString()}`,
         );
         if (!response.ok) {
           throw new Error("Failed to fetch songs");
@@ -198,7 +200,7 @@ function App() {
     }
     async function fetchCurrentUser() {
       try {
-        const response = await fetch("http://localhost:5001/api/auth/me", {
+        const response = await fetch(`${API_BASE_URL}/api/auth/me`, {
           headers: {
             Authorization: `Bearer ${token}`,
           },
@@ -208,14 +210,11 @@ function App() {
         }
         const data = await response.json();
         setUser(data.user);
-        const ratingsResponse = await fetch(
-          "http://localhost:5001/api/ratings/me",
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
+        const ratingsResponse = await fetch(`${API_BASE_URL}/api/ratings/me`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
           },
-        );
+        });
         if (!ratingsResponse.ok) {
           throw new Error("Failed to load ratings");
         }
@@ -255,7 +254,7 @@ function App() {
         setPreferencesLoaded(false);
         setPreferencesError("");
         const preferencesResponse = await fetch(
-          "http://localhost:5001/api/preferences",
+          `${API_BASE_URL}/api/preferences`,
           {
             headers: {
               Authorization: `Bearer ${token}`,
@@ -310,7 +309,7 @@ function App() {
           limit: "12",
         });
         const response = await fetch(
-          `http://localhost:5001/api/artists?${params.toString()}`,
+          `${API_BASE_URL}/api/artists?${params.toString()}`,
           {
             signal: controller.signal,
           },
@@ -346,14 +345,11 @@ function App() {
     try {
       setRecommendationsLoading(true);
       setRecommendationsError("");
-      const response = await fetch(
-        "http://localhost:5001/api/recommendations",
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
+      const response = await fetch(`${API_BASE_URL}/api/recommendations`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
         },
-      );
+      });
       const data: RecommendationsResponse = await response.json();
       if (!response.ok) {
         throw new Error("Failed to load recommendations");
@@ -423,7 +419,7 @@ function App() {
   useEffect(() => {
     async function fetchGenres() {
       try {
-        const response = await fetch("http://localhost:5001/api/genres");
+        const response = await fetch(`${API_BASE_URL}/api/genres`);
         if (!response.ok) {
           throw new Error("Failed to load genres");
         }
@@ -510,7 +506,7 @@ function App() {
     try {
       setPreferencesSaving(true);
       setPreferencesError("");
-      const response = await fetch("http://localhost:5001/api/preferences", {
+      const response = await fetch(`${API_BASE_URL}/api/preferences`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -577,8 +573,8 @@ function App() {
       setAuthError("");
       const endpoint =
         authMode === "login"
-          ? "http://localhost:5001/api/auth/login"
-          : "http://localhost:5001/api/auth/register";
+          ? `${API_BASE_URL}/api/auth/login`
+          : `${API_BASE_URL}/api/auth/register`;
       const body =
         authMode === "login"
           ? {
@@ -625,7 +621,7 @@ function App() {
     }
     try {
       setRatingError("");
-      const response = await fetch("http://localhost:5001/api/ratings", {
+      const response = await fetch(`${API_BASE_URL}/api/ratings`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
