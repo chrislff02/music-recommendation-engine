@@ -498,3 +498,23 @@ MusicMatch was built as a project to combine several areas of software developme
 The recommendation algorithm is implemented directly in Python rather than relying on an external recommendation service.
 
 The goal of the project is to demonstrate how user behavior, onboarding preferences, collaborative signals, and catalog metadata can be combined into an explainable personalized music discovery system.
+
+## Screenshots
+
+### Browse Songs
+
+Search the catalog, filter by genre, and rate songs to help MusicMatch learn your preferences.
+
+![Browse Songs](screenshots/browse.png)
+
+### Taste Profile
+
+Choose favorite genres and artists to personalize recommendations, especially for new users with limited rating history.
+
+![Taste Profile](screenshots/taste-profile.png)
+
+### Personalized Recommendations
+
+View ranked recommendations with match scores, explanations, and a breakdown of the signals contributing to each recommendation.
+
+![Personalized Recommendations](screenshots/recommendations.png)
